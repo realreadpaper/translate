@@ -35,15 +35,23 @@ type MessageHandlerDependencies = {
   loadSettings: () => Promise<ExtensionSettings>;
 };
 
+type IncomingMessage = StartPageTranslationMessage | { type: string };
+
+function isStartPageTranslationMessage(
+  message: IncomingMessage,
+): message is StartPageTranslationMessage {
+  return message.type === 'START_PAGE_TRANSLATION';
+}
+
 export function createMessageHandler({
   sendMessageToTab,
   translatePage,
   loadSettings,
 }: MessageHandlerDependencies) {
   return async function handleMessage(
-    message: StartPageTranslationMessage | { type: string },
+    message: IncomingMessage,
   ): Promise<PageTranslationFinishedMessage> {
-    if (message.type !== 'START_PAGE_TRANSLATION') {
+    if (!isStartPageTranslationMessage(message)) {
       throw new Error(`Unsupported message: ${message.type}`);
     }
 
