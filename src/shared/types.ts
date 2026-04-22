@@ -2,11 +2,27 @@ export type DisplayMode = 'bilingual' | 'translated-only' | 'original-only';
 
 export type ProviderId = 'openai-compatible' | 'deepseek' | 'traditional';
 
-export type ProviderSettings = {
-  apiKey?: string;
-  baseUrl?: string;
-  model?: string;
-  endpoint?: 'google-translate' | 'microsoft-translator';
+export type OpenAICompatibleProviderSettings = {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+};
+
+export type DeepSeekProviderSettings = {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+};
+
+export type TraditionalProviderSettings = {
+  apiKey: string;
+  endpoint: 'google-translate' | 'microsoft-translator';
+};
+
+export type ProviderSettingsById = {
+  'openai-compatible': OpenAICompatibleProviderSettings;
+  deepseek: DeepSeekProviderSettings;
+  traditional: TraditionalProviderSettings;
 };
 
 export type ExtensionSettings = {
@@ -14,5 +30,5 @@ export type ExtensionSettings = {
   sourceLanguage: string;
   targetLanguage: string;
   displayMode: DisplayMode;
-  providers: Record<ProviderId, ProviderSettings>;
+  providers: ProviderSettingsById;
 };
