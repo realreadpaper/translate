@@ -21,11 +21,13 @@ type TranslateContext = {
   providerSettings: ExtensionSettings['providers'][ExtensionSettings['providerId']];
 };
 
+type SendMessageToTab = {
+  (tabId: number, message: CollectPageSegmentsMessage): Promise<SourceSegment[]>;
+  (tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
+};
+
 type MessageHandlerDependencies = {
-  sendMessageToTab: (
-    tabId: number,
-    message: CollectPageSegmentsMessage | ApplyPageTranslationMessage,
-  ) => Promise<SourceSegment[] | void>;
+  sendMessageToTab: SendMessageToTab;
   translatePage: (
     segments: SourceSegment[],
     context: TranslateContext,
@@ -47,7 +49,7 @@ export function createMessageHandler({
 
     const settings = await loadSettings();
     const segments = await sendMessageToTab(message.tabId, { type: 'COLLECT_PAGE_SEGMENTS' });
-    const translationResult = await translatePage(segments as SourceSegment[], {
+    const translationResult = await translatePage(segments, {
       providerId: settings.providerId,
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
