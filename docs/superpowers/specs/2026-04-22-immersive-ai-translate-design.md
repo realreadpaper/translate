@@ -1,177 +1,178 @@
-# Immersive AI Translate Design
+# 沉浸式 AI 翻译插件设计文档
 
-**Date:** 2026-04-22
+**日期：** 2026-04-22
 
-**Status:** Draft approved in conversation, pending file review
+**状态：** 已在对话中确认范围，等待文件级评审
 
-## 1. Summary
+## 1. 概述
 
-Immersive AI Translate is a Chrome / Edge browser extension for immersive full-page translation. The MVP focuses on translating web page content into a target language while preserving reading flow, page structure, and user control. The extension supports multiple translation providers, defaults to bilingual display, and lets users switch between original-only, translated-only, and bilingual reading modes without reloading the page.
+沉浸式 AI 翻译插件是一个面向 Chrome / Edge 的浏览器扩展，核心目标是提供整页沉浸式翻译体验。MVP 聚焦于将网页正文翻译为目标语言，同时尽量保留原始阅读流、页面结构和用户控制权。插件默认采用双语展示，并允许用户在原文、译文、双语三种模式之间切换，且无需重新请求翻译。
 
-The first release is intentionally limited to a local-first extension architecture. Users configure API keys and provider settings directly in the extension. Login, cloud sync, membership, and server-side proxying are explicitly out of scope for MVP, but the design keeps those paths open through clear adapter and transport boundaries.
+第一版采用本地优先架构。用户直接在插件中配置 API Key、模型和服务地址。登录、云端同步、会员、服务端转发等能力明确不纳入 MVP，但整体设计会预留后续扩展所需的适配器与传输边界。
 
-## 2. Product Goals
+## 2. 产品目标
 
-### 2.1 Primary goals
+### 2.1 核心目标
 
-- Let users translate the current web page into a chosen target language with one primary action.
-- Make the translated page comfortable to read, not just technically translated.
-- Support multiple AI and translation providers so users can choose based on quality, cost, and speed.
-- Preserve the original page and allow instant switching between display modes.
-- Provide a practical local-first MVP that can be implemented and tested with strict TDD.
+- 让用户通过一次主要操作即可翻译当前网页。
+- 让翻译结果不仅“能看懂”，还“适合持续阅读”。
+- 支持多种 AI 与翻译服务，方便用户在质量、成本、速度之间自行选择。
+- 保留原网页内容，并允许用户快速切换展示模式。
+- 在严格 TDD 约束下，做出一个可落地、可验证的本地优先 MVP。
 
-### 2.2 Non-goals for MVP
+### 2.2 MVP 非目标
 
-- User login or registration
-- Pro membership or billing
-- Server-side request forwarding
-- Cloud settings sync
-- Hover translation
-- Text selection translation
-- PDF, image, or subtitle translation
-- Cross-device collaboration features
+- 用户登录或注册
+- Pro 会员或计费
+- 服务端统一转发请求
+- 云端设置同步
+- 鼠标悬停翻译
+- 划词翻译
+- PDF、图片或字幕翻译
+- 跨设备协作能力
 
-## 3. Target Users
+## 3. 目标用户
 
-- Users who regularly read foreign-language articles, blogs, and documentation in the browser
-- Users who want better quality than basic machine translation
-- Users who want to compare different AI providers
-- Users who prefer controlling their own API keys instead of depending on a closed platform
+- 经常在浏览器中阅读外文文章、博客、技术文档的用户
+- 希望获得高于传统机器翻译质量的重度阅读用户
+- 希望在多个 AI 服务之间对比效果的用户
+- 希望自己掌控 API Key，而不是完全依赖封闭平台的用户
 
-## 4. Core User Scenarios
+## 4. 核心使用场景
 
-### 4.1 Full-page translation
+### 4.1 整页翻译
 
-The user opens a web page, clicks the extension, and starts translation. The extension extracts the main readable text blocks, sends them to the selected provider, and renders the translated result back into the page.
+用户打开网页后，点击插件开始翻译。插件提取页面中适合阅读的正文文本块，将其发送给选定服务完成翻译，再将译文按沉浸式方式渲染回当前页面。
 
-### 4.2 Bilingual reading
+### 4.2 双语阅读
 
-The extension defaults to bilingual mode. Users can read original and translated content together and switch to translated-only or original-only mode without needing another translation request.
+插件默认采用双语模式。用户可以同时阅读原文和译文，也可以在不重新发起翻译请求的前提下切换为“仅译文”或“仅原文”。
 
-### 4.3 Provider switching
+### 4.3 服务切换
 
-Users can configure multiple providers and switch between them from the extension UI. The extension uses the selected provider for subsequent page translations.
+用户可以在插件界面中配置多个服务，并在后续翻译时切换服务。插件会使用当前选中的服务完成整页翻译。
 
-### 4.4 Local configuration
+### 4.4 本地配置
 
-Users can configure API key, model, base URL, source language, target language, and display mode in the extension settings stored locally with browser storage.
+用户可以在插件设置中配置 API Key、模型、Base URL、源语言、目标语言和默认展示模式，配置通过浏览器本地存储保存。
 
-## 5. MVP Scope
+## 5. MVP 范围
 
-### 5.1 In scope
+### 5.1 纳入范围
 
-- Chrome / Edge browser extension
-- Full-page immersive translation
-- Default bilingual display
-- Display mode switching:
-  - bilingual
-  - translated-only
-  - original-only
-- Source and target language selection
-- Source language auto-detection support in provider config and translation flow
-- Provider support:
-  - OpenAI-compatible API
+- Chrome / Edge 浏览器扩展
+- 整页沉浸式翻译
+- 默认双语展示
+- 展示模式切换：
+  - 双语
+  - 仅译文
+  - 仅原文
+- 源语言与目标语言选择
+- 源语言自动识别能力，体现在 provider 配置与翻译流程中
+- 服务接入支持：
+  - OpenAI 兼容接口
   - DeepSeek
-  - At least one traditional translation service implementation
-  - Custom OpenAI-compatible base URL
-- Local settings page for provider credentials and defaults
-- Robust page content extraction and segmented translation
-- Graceful failure handling with partial success support
-- Restore original page view without breaking layout
+  - 至少一个传统翻译服务实现
+  - 自定义 OpenAI 兼容 Base URL
+- 本地设置页，用于配置服务凭证和默认项
+- 稳定的网页内容提取与分段翻译
+- 支持部分成功的优雅失败处理
+- 可恢复原网页视图，且尽量不破坏原始布局
 
-### 5.2 Explicit exclusions
+### 5.2 明确排除
 
-- Login system
-- Remote account identity
-- Paid plan / Pro gating
-- Cloud proxy / relay
-- Usage billing
-- Hover / selection translation
-- Translation memory
-- Glossary management
-- OCR or image extraction
+- 登录系统
+- 云端账号体系
+- 付费会员 / Pro 能力
+- 云端代理 / 中转
+- 使用量计费
+- 鼠标悬停翻译
+- 划词翻译
+- 翻译记忆
+- 术语表管理
+- OCR 或图片识别翻译
 
-## 6. UX Requirements
+## 6. 体验要求
 
-### 6.1 Translation UX
+### 6.1 翻译体验
 
-- Translation must start from a clear primary action in the popup.
-- Users must receive clear feedback for idle, loading, success, partial success, and failure states.
-- The page should remain readable throughout translation.
-- Partial completion is better than failing the whole page.
-- Users must always be able to restore the original page.
+- 翻译操作必须从插件弹窗中的明确主操作触发。
+- 用户必须能看到清晰的状态反馈，包括未开始、加载中、成功、部分成功、失败。
+- 翻译过程中页面应保持可阅读。
+- 局部成功优于整页失败。
+- 用户必须始终可以恢复原文页面。
 
-### 6.2 Reading modes
+### 6.2 阅读模式
 
-- Default mode is bilingual.
-- Users can switch display mode without re-requesting translation.
-- The original text should remain recoverable even in translated-only mode.
+- 默认模式为双语。
+- 用户切换展示模式时，不应重新发起翻译请求。
+- 即使在“仅译文”模式下，原文也应保持可恢复。
 
-### 6.3 Provider UX
+### 6.3 服务配置体验
 
-- Switching providers should be straightforward in the popup or settings.
-- Invalid provider configuration should produce readable, actionable errors.
-- Users should not need to repeatedly open deep settings for common actions.
+- 切换服务应当在弹窗或设置页中直接完成。
+- 服务配置无效时，应返回用户可理解、可操作的错误提示。
+- 常见操作不应要求用户频繁进入深层设置页。
 
-## 7. Success Metrics
+## 7. 成功标准
 
-- A first-time user can configure a provider and translate a page within 3 minutes.
-- The extension can successfully translate common article, blog, and documentation pages at a usable level.
-- Failure does not damage the original page experience.
-- Users perceive the workflow as more convenient than copy-pasting content into a chat tool.
+- 首次使用的用户可以在 3 分钟内完成服务配置并成功翻译一页网页。
+- 插件可以以可用水平翻译主流文章页、博客页、文档页。
+- 翻译失败不会破坏原网页阅读体验。
+- 用户能明显感知到：这比复制文本到聊天工具里再翻译更顺手。
 
-## 8. Technical Architecture
+## 8. 技术架构
 
-### 8.1 High-level architecture
+### 8.1 总体架构
 
-The MVP uses a Manifest V3 browser extension architecture with four main layers:
+MVP 采用 Manifest V3 浏览器扩展架构，拆分为四层：
 
 1. Popup / Options UI
-2. Background service worker
-3. Content script
-4. Provider adapter layer
+2. Background Service Worker
+3. Content Script
+4. Provider Adapter Layer
 
-This structure isolates UI, translation orchestration, DOM manipulation, and provider-specific API logic. It keeps the codebase testable and creates clean extension points for future server-side transport and account-backed configuration.
+这样的分层方式可以把界面、翻译调度、DOM 操作、服务适配逻辑清晰隔离。它既有利于测试，也为后续的服务端传输层与账号体系预留了扩展空间。
 
-### 8.2 Responsibilities by layer
+### 8.2 各层职责
 
 #### Popup / Options UI
 
-- Start page translation
-- Select provider
-- Select source and target languages
-- Switch display mode
-- Configure API key, base URL, and model
-- Surface user-readable state and errors
+- 启动整页翻译
+- 选择翻译服务
+- 选择源语言与目标语言
+- 切换展示模式
+- 配置 API Key、Base URL、模型
+- 向用户展示可读状态与错误信息
 
-#### Background service worker
+#### Background Service Worker
 
-- Read settings
-- Validate provider configuration
-- Coordinate translation requests
-- Batch segments for translation
-- Route calls to the selected provider adapter
-- Normalize provider errors
-- Send results and status back to the page
+- 读取设置
+- 校验服务配置
+- 协调整个翻译请求流程
+- 对文本分段进行批量分组
+- 按选择的服务路由到对应 provider adapter
+- 标准化不同服务的错误
+- 将结果与状态回传给页面
 
-#### Content script
+#### Content Script
 
-- Extract translatable text segments from the current page
-- Track current page translation session state
-- Render translation output into the DOM
-- Toggle reading modes
-- Restore original page state
+- 从当前页面中提取可翻译文本段
+- 跟踪当前页面的翻译会话状态
+- 将译文渲染回 DOM
+- 切换阅读模式
+- 恢复原页面状态
 
-#### Provider adapter layer
+#### Provider Adapter Layer
 
-- Build requests for each provider
-- Parse provider responses
-- Normalize provider-specific failures
-- Expose provider metadata and capabilities
+- 为不同服务构建请求
+- 解析不同服务的响应
+- 标准化 provider 级错误
+- 暴露服务元信息与能力信息
 
-## 9. Proposed Code Boundaries
+## 9. 建议的代码边界
 
-The initial code structure should separate shared domain types, background orchestration, page-side extraction/rendering, and persistence.
+初始代码结构应明确分离共享类型、后台调度、页面提取/渲染以及本地存储。
 
 ### 9.1 Shared
 
@@ -179,11 +180,11 @@ The initial code structure should separate shared domain types, background orche
 - `src/shared/config`
 - `src/shared/messages`
 
-Responsibilities:
+职责：
 
-- Shared types for providers, languages, segments, settings, session state, and translation results
-- Default config and schema helpers
-- Typed message contracts between popup, background, and content script
+- 定义 provider、语言、segment、settings、session state、translation result 等共享类型
+- 提供默认配置与 schema 辅助
+- 约束 popup、background、content script 之间的消息协议
 
 ### 9.2 Background
 
@@ -191,13 +192,13 @@ Responsibilities:
 - `src/background/translator`
 - `src/background/messaging`
 
-Responsibilities:
+职责：
 
-- Provider registry
-- Config validation
-- Translation orchestration
-- Batch and retry logic
-- Message handling for popup/content communication
+- provider 注册表
+- 配置校验
+- 翻译调度
+- 批处理与重试逻辑
+- popup / content 之间的消息处理
 
 ### 9.3 Content
 
@@ -205,73 +206,73 @@ Responsibilities:
 - `src/content/segment-renderer`
 - `src/content/page-session`
 
-Responsibilities:
+职责：
 
-- Extract safe text nodes from the page
-- Track page translation state
-- Render bilingual / translated-only / original-only modes
-- Restore the page on demand
+- 从页面中提取安全可翻译文本节点
+- 跟踪页面翻译状态
+- 渲染双语 / 仅译文 / 仅原文模式
+- 在需要时恢复页面
 
 ### 9.4 Storage
 
 - `src/storage/settings`
 
-Responsibilities:
+职责：
 
-- Persist local settings through `chrome.storage.local`
-- Provide a stable abstraction for future remote settings support
+- 通过 `chrome.storage.local` 持久化本地设置
+- 为未来远端设置源提供稳定抽象
 
-## 10. Full-Page Translation Flow
+## 10. 整页翻译流程
 
-1. User opens the popup and clicks the translate action.
-2. Popup sends `START_PAGE_TRANSLATION` to background.
-3. Background loads saved settings and validates selected provider config.
-4. Background asks the content script to collect translatable segments from the current tab.
-5. Content script extracts stable segments and returns metadata keyed by segment id.
-6. Background groups segments into translation batches.
-7. Background invokes the selected provider adapter.
-8. Provider returns normalized translated segments or batch-level errors.
-9. Background sends translated results and status updates back to the content script.
-10. Content script renders translation results into the page and updates session state.
-11. Popup and page state reflect progress, success, partial success, or failure.
+1. 用户打开插件弹窗并点击翻译操作。
+2. Popup 向 background 发送 `START_PAGE_TRANSLATION`。
+3. Background 读取当前设置并校验服务配置。
+4. Background 通知当前标签页中的 content script 收集可翻译 segment。
+5. Content script 提取稳定 segment，并按 segment id 返回元数据。
+6. Background 将 segment 组织成若干翻译批次。
+7. Background 调用当前选中的 provider adapter。
+8. Provider 返回标准化的翻译结果或批次级错误。
+9. Background 将翻译结果与状态更新发送回 content script。
+10. Content script 将译文渲染回页面，并更新当前页面会话状态。
+11. Popup 与页面状态同步显示进度、成功、部分成功或失败。
 
-Key design decisions:
+关键设计点：
 
-- DOM extraction and API communication are separated.
-- Segment ids link extraction output to translated output.
-- The original DOM is preserved so display mode switching and restore do not require another extraction pass.
+- DOM 提取与 API 调用相互分离。
+- 通过 segment id 将提取结果与翻译结果稳定关联。
+- 保留原始 DOM，以便模式切换与恢复原文不需要重新提取。
 
-## 11. Provider Strategy
+## 11. Provider 设计策略
 
-### 11.1 Supported provider families
+### 11.1 MVP 支持的服务类型
 
-- OpenAI-compatible APIs
+- OpenAI 兼容接口
 - DeepSeek
-- Traditional translation provider implementation for MVP
-- Custom OpenAI-compatible endpoint via configurable base URL
+- 传统翻译服务实现
+- 可配置 Base URL 的自定义 OpenAI 兼容接口
 
-### 11.2 Unified provider interface
+### 11.2 统一 provider 接口
 
-Each provider adapter should expose:
+每个 provider adapter 应统一暴露以下能力：
 
 - `validateConfig()`
 - `translateSegments()`
 - `normalizeError()`
 - `getMeta()`
 
-This keeps adapters focused on request construction, response parsing, and error mapping. DOM logic, UI, and session handling remain outside provider code.
+这样每个 adapter 只负责请求构造、响应解析和错误映射，不负责 DOM、UI 与会话管理。
 
-### 11.3 Transport expectations
+### 11.3 Transport 预留
 
-- OpenAI-compatible, DeepSeek, and custom-compatible endpoints should share a transport path where possible.
-- Traditional translation providers may require a dedicated transport implementation.
-- A transport abstraction should be introduced early so future server-side relay can be added without rewriting provider logic.
+- OpenAI 兼容、DeepSeek、自定义兼容接口应尽量复用同一条 transport 路径。
+- 传统翻译服务可以使用单独 transport 实现。
+- 应尽早引入 transport 抽象，为未来服务端转发预留边界，而不是届时重写 provider 逻辑。
 
-## 12. Content Extraction and Rendering
+## 12. 内容提取与渲染
 
-### 12.1 Extraction rules
+### 12.1 提取规则
 
-The content script should identify readable text content while skipping nodes that should not be translated or altered, including:
+Content script 应识别页面中适合阅读的文本内容，同时跳过不应翻译或不应改写的节点，包括：
 
 - `script`
 - `style`
@@ -279,210 +280,210 @@ The content script should identify readable text content while skipping nodes th
 - `pre`
 - `textarea`
 - `input`
-- empty or whitespace-only nodes
+- 空节点或仅空白字符节点
 
-Segments should preserve page order and carry stable ids for later mapping.
+提取后的 segment 应保留页面顺序，并带有稳定 id，便于后续映射。
 
-### 12.2 Translation batching
+### 12.2 翻译批处理
 
-The page must not be sent as one giant prompt. Segments should be grouped into bounded batches using character or token thresholds. This reduces failures, controls cost, and makes progress reporting possible.
+整页内容不能作为一个超长请求直接发送给模型。应基于字符数或 token 上限将 segment 分成多个批次。这样可以降低失败风险、控制成本，并支持进度展示。
 
-### 12.3 Rendering strategy
+### 12.3 渲染策略
 
-The MVP should use text-node anchored rendering instead of replacing large HTML blocks wholesale.
+MVP 不应采用大面积 `innerHTML` 覆盖式替换，而应使用基于文本节点锚点的渲染策略。
 
-Expected behavior:
+预期行为：
 
-- Keep original content accessible
-- Insert translated content in a way that preserves layout as much as possible
-- Support bilingual, translated-only, and original-only modes
-- Restore original view by removing or disabling translation artifacts
+- 保留原文可访问性
+- 以尽量不破坏布局的方式插入译文内容
+- 支持双语、仅译文、仅原文三种模式
+- 在恢复原文时移除或停用翻译产物
 
-### 12.4 Why this rendering strategy
+### 12.4 采用该策略的原因
 
-- It is less destructive than broad `innerHTML` replacement.
-- It simplifies restore behavior.
-- It supports instant mode switching without another network request.
-- It reduces the risk of breaking interactive page structure.
+- 相比大块替换 HTML，它更不容易破坏原站结构。
+- 恢复原文更简单。
+- 模式切换无需重新请求翻译。
+- 更利于控制交互页和复杂站点的破坏范围。
 
-## 13. Error Handling Model
+## 13. 错误处理模型
 
-### 13.1 Error categories
+### 13.1 错误分类
 
-- Configuration errors
-  - missing API key
-  - invalid base URL
-  - missing model when required
-- Network errors
-  - timeout
-  - offline
-  - rate limit
-  - upstream server failure
-- Provider errors
-  - authentication failure
-  - unsupported request format
-  - quota or billing issues
-- Page errors
-  - no translatable content
-  - injection not available
-  - target node invalidated during render
-- Partial failures
-  - one or more batches fail while others succeed
+- 配置错误
+  - 缺失 API Key
+  - Base URL 非法
+  - 必填模型为空
+- 网络错误
+  - 超时
+  - 离线
+  - 限流
+  - 上游服务异常
+- Provider 错误
+  - 鉴权失败
+  - 请求格式不支持
+  - 配额或计费问题
+- 页面错误
+  - 当前页面没有可翻译内容
+  - 页面不可注入
+  - 渲染时目标节点失效
+- 部分失败
+  - 某些批次失败，但其他批次成功
 
-### 13.2 Error handling principles
+### 13.2 错误处理原则
 
-- Translate as much as possible before surfacing failure.
-- Never damage the original page because of a failed translation.
-- Return actionable errors to the user in plain language.
-- Preserve successful batches even if some batches fail.
-- Make retry behavior local to the failed batch when possible.
+- 优先翻译成功的部分，再反馈失败信息。
+- 无论发生什么错误，都不能破坏原网页。
+- 错误信息要尽量说人话，并具有可操作性。
+- 不能因为少数批次失败就回滚整页成功结果。
+- 如需重试，应尽可能只针对失败批次。
 
-## 14. Extensibility Paths
+## 14. 扩展性预留
 
-The MVP deliberately excludes cloud and premium features, but the following abstractions should be included early:
+虽然 MVP 明确不做云端账号与会员能力，但建议从一开始预留以下抽象：
 
-- `Transport` interface: local direct requests now, remote gateway later
-- `SettingsSource` interface: local settings now, remote-backed settings later
-- `ProviderCapability` metadata: supports richer future provider-specific features
-- `FeatureFlags` or equivalent extensibility mechanism for hover translation and selection translation
+- `Transport` 接口：当前走本地直连，后续可切到云端网关
+- `SettingsSource` 接口：当前走本地设置，后续可扩展为远端配置源
+- `ProviderCapability` 元信息：为未来能力差异化提供基础
+- `FeatureFlags` 或等价机制：为划词翻译、悬停翻译预留扩展位
 
-These abstractions should stay lightweight in MVP and only cover needs already implied by the design.
+这些抽象应保持轻量，只覆盖已被当前设计实际需要支撑的范围。
 
-## 15. TDD Strategy
+## 15. TDD 开发策略
 
-### 15.1 Core rule
+### 15.1 核心原则
 
-No production code should be added before a failing test exists for the behavior being implemented.
+在没有先写失败测试的前提下，不应写任何生产代码。
 
-### 15.2 Testing layers
+### 15.2 测试分层
 
-#### Unit tests
+#### 单元测试
 
-Focus:
+关注点：
 
-- provider config validation
-- request construction
-- error normalization
-- batching logic
-- settings defaults and schema behavior
-- session state transitions
+- provider 配置校验
+- 请求构造
+- 错误标准化
+- 批处理逻辑
+- settings 默认值与 schema 行为
+- session state 状态流转
 
-#### DOM behavior tests
+#### DOM 行为测试
 
-Focus:
+关注点：
 
-- translatable node extraction
-- skipping excluded nodes
-- stable segment ordering
-- bilingual rendering
-- translated-only / original-only switching
-- restore behavior
+- 可翻译节点提取
+- 排除不应翻译的节点
+- segment 顺序稳定性
+- 双语渲染
+- 仅译文 / 仅原文切换
+- 恢复原文
 
-#### Background integration tests
+#### Background 集成测试
 
-Focus:
+关注点：
 
-- popup-to-background message flow
-- settings loading
-- provider routing
-- partial failure handling
-- normalized result delivery
+- popup 到 background 的消息流
+- settings 读取
+- provider 路由
+- 部分失败处理
+- 结果标准化与回传
 
-#### End-to-end tests
+#### 端到端测试
 
-Focus:
+关注点：
 
-- loading the extension
-- opening a test page
-- triggering full-page translation
-- seeing bilingual output
-- switching display modes
-- surfacing readable config errors
+- 加载扩展
+- 打开测试网页
+- 触发整页翻译
+- 页面出现双语结果
+- 切换展示模式
+- 配置错误时能展示可读提示
 
-## 16. Recommended Implementation Stack
+## 16. 推荐实现技术栈
 
 - TypeScript
 - Vite
-- React for popup and options pages
-- Native TypeScript modules for content script and background worker
-- Vitest for unit and integration tests
-- jsdom for DOM behavior tests
-- Playwright for extension end-to-end tests
+- React，用于 popup 与 options 页面
+- 原生 TypeScript 模块，用于 content script 与 background worker
+- Vitest，用于单元与集成测试
+- jsdom，用于 DOM 行为测试
+- Playwright，用于扩展端到端测试
 
-This stack balances fast feedback with realistic extension verification.
+这个组合可以在开发效率、反馈速度和扩展真实验证之间保持平衡。
 
-## 17. MVP Delivery Sequence
+## 17. MVP 交付顺序
 
-The implementation should progress in small, testable slices:
+实现应按小步快跑、每步可测试的方式推进：
 
-1. Settings schema and defaults
-2. Provider registry and config validation
-3. Segment extraction
-4. Batch translation orchestrator
-5. DOM renderer and display mode switching
-6. Background/content messaging
+1. Settings schema 与默认值
+2. Provider 注册表与配置校验
+3. Segment 提取
+4. 批量翻译调度器
+5. DOM 渲染与展示模式切换
+6. Background / Content 消息打通
 7. Popup MVP
-8. Options page MVP
-9. End-to-end stabilization
+8. Options Page MVP
+9. 端到端稳定化
 
-Each slice should follow strict Red -> Green -> Refactor loops and produce a working increment.
+每一个阶段都应遵守严格的 `Red -> Green -> Refactor` 循环，并形成一个可工作的增量结果。
 
-## 18. Acceptance Criteria
+## 18. 完成标准
 
-The MVP is considered complete when:
+当满足以下条件时，可认为 MVP 开发完成：
 
-- Unit tests pass
-- DOM behavior tests pass
-- Background integration tests pass
-- At least one full-page translation E2E path passes
-- At least one provider config error path passes
-- Manual verification confirms:
-  - a real article-like page can be translated
-  - display modes can switch without retranslation
-  - the original page can be restored
-  - layout damage is limited and acceptable for MVP
+- 单元测试通过
+- DOM 行为测试通过
+- Background 集成测试通过
+- 至少一条整页翻译 E2E 主链路通过
+- 至少一条 provider 配置错误链路通过
+- 人工验证确认：
+  - 真实文章型页面可以被翻译
+  - 展示模式切换无需重新翻译
+  - 原文页面可以恢复
+  - 页面布局损伤控制在 MVP 可接受范围内
 
-## 19. Open Decisions Resolved
+## 19. 已确认的关键决策
 
-The following decisions were confirmed during design:
+以下决策已经在设计阶段确认：
 
-- Platform: Chrome / Edge browser extension
-- Primary MVP scenario: full-page immersive translation
-- Provider direction: OpenAI-compatible, DeepSeek, traditional translation implementation, custom base URL
-- Display default: bilingual with switching support
-- Key management plan: local and cloud are both part of long-term product direction, but MVP is local-first
-- Login / Pro / relay: excluded from MVP
+- 平台：Chrome / Edge 浏览器扩展
+- 第一阶段主场景：整页沉浸式翻译
+- 服务方向：OpenAI 兼容、DeepSeek、传统翻译服务、自定义 Base URL
+- 默认展示：双语，可切换
+- 密钥管理方向：长期支持本地与云端两种模式，但 MVP 先走本地配置
+- 登录 / Pro / 服务端转发：不进入 MVP
 
-## 20. Risks and Mitigations
+## 20. 风险与缓解方案
 
-### 20.1 DOM variability risk
+### 20.1 DOM 差异风险
 
-Risk:
-Different sites structure content unpredictably, making extraction and render consistency difficult.
+风险：
+不同网站的结构差异很大，正文提取与渲染一致性会比较难保证。
 
-Mitigation:
-Keep extraction rules conservative, preserve original nodes, and test against representative article-like fixtures early.
+缓解：
+提取规则保持保守，优先保留原节点，并尽早使用多种文章型页面 fixture 做测试。
 
-### 20.2 Provider inconsistency risk
+### 20.2 Provider 不一致风险
 
-Risk:
-Different providers return different response shapes, error behaviors, and latency profiles.
+风险：
+不同服务的响应结构、错误模型、延迟特征差异较大。
 
-Mitigation:
-Use strict adapter interfaces and normalized error/result models.
+缓解：
+通过严格 adapter 接口与统一错误/结果模型收敛差异。
 
-### 20.3 MV3 runtime constraints
+### 20.3 MV3 运行时约束风险
 
-Risk:
-Background service workers and content-script coordination can be fragile if state is not well-contained.
+风险：
+Background service worker 与 content script 的协作在 MV3 下容易因为状态不清晰而变脆弱。
 
-Mitigation:
-Keep session state explicit, messages typed, and integration tests focused on message boundaries.
+缓解：
+保持显式 session state、强类型消息协议，并重点补足消息边界上的集成测试。
 
-### 20.4 Scope expansion risk
+### 20.4 范围膨胀风险
 
-Risk:
-Adding login, cloud sync, selection translation, or hover translation too early will dilute MVP quality.
+风险：
+如果过早引入登录、云端同步、划词翻译、悬停翻译，MVP 质量会被明显稀释。
 
-Mitigation:
-Treat those as later roadmap items and keep MVP implementation aligned to the approved scope in this document.
+缓解：
+将这些能力明确视为后续 roadmap，只围绕本设计文档中已确认范围推进实现。
