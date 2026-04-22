@@ -17,4 +17,10 @@ export const deepseekProvider: ProviderAdapter<'deepseek'> = {
 
     return { ok: true };
   },
+  async translateSegments() {
+    return { ok: false, message: 'Not implemented for deepseek' };
+  },
+  normalizeError() {
+    return 'Request failed for deepseek';
+  },
 };

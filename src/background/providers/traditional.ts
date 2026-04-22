@@ -9,4 +9,10 @@ export const traditionalProvider: ProviderAdapter<'traditional'> = {
 
     return { ok: true };
   },
+  async translateSegments() {
+    return { ok: false, message: 'Not implemented for traditional' };
+  },
+  normalizeError() {
+    return 'Request failed for traditional';
+  },
 };
