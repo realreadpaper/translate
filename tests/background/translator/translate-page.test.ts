@@ -45,4 +45,73 @@ describe('translatePageSegments', () => {
       failedBatches: [{ segmentIds: ['seg-2'], message: 'rate limited' }],
     });
   });
+
+  it('throws when batchSize is not greater than 0', async () => {
+    await expect(
+      translatePageSegments(
+        [{ id: 'seg-0', text: 'first' }],
+        {
+          providerId: 'openai-compatible',
+          sourceLanguage: 'en',
+          targetLanguage: 'zh-CN',
+          providerSettings: {
+            apiKey: 'test-key',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'gpt-4o-mini',
+          },
+        },
+        async ({ segments }) => ({
+          ok: true,
+          segments: segments.map((segment) => ({
+            id: segment.id,
+            translatedText: `${segment.text}-zh`,
+          })),
+        }),
+        0,
+      ),
+    ).rejects.toThrow('batch size must be greater than 0');
+  });
+
+  it('records thrown translateBatch errors as failed batches and continues', async () => {
+    const result = await translatePageSegments(
+      [
+        { id: 'seg-0', text: 'first' },
+        { id: 'seg-1', text: 'second' },
+        { id: 'seg-2', text: 'third' },
+      ],
+      {
+        providerId: 'openai-compatible',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
+        providerSettings: {
+          apiKey: 'test-key',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-4o-mini',
+        },
+      },
+      async ({ segments }) => {
+        if (segments[0].id === 'seg-0') {
+          return {
+            ok: true,
+            segments: segments.map((segment) => ({
+              id: segment.id,
+              translatedText: `${segment.text}-zh`,
+            })),
+          };
+        }
+
+        throw new Error('network down');
+      },
+      2,
+    );
+
+    expect(result).toEqual({
+      status: 'partial-success',
+      translated: [
+        { id: 'seg-0', translatedText: 'first-zh' },
+        { id: 'seg-1', translatedText: 'second-zh' },
+      ],
+      failedBatches: [{ segmentIds: ['seg-2'], message: 'network down' }],
+    });
+  });
 });

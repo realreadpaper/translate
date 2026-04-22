@@ -37,11 +37,20 @@ export async function translatePageSegments(
   const failedBatches: Array<{ segmentIds: string[]; message: string }> = [];
 
   for (const batch of batches) {
-    const result = await translateBatch({
-      segments: batch,
-      sourceLanguage: context.sourceLanguage,
-      targetLanguage: context.targetLanguage,
-    });
+    let result: TranslateBatchResult;
+    try {
+      result = await translateBatch({
+        segments: batch,
+        sourceLanguage: context.sourceLanguage,
+        targetLanguage: context.targetLanguage,
+      });
+    } catch (error) {
+      failedBatches.push({
+        segmentIds: batch.map((segment) => segment.id),
+        message: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
 
     if (result.ok) {
       translated.push(...result.segments);
