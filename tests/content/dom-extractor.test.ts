@@ -20,4 +20,18 @@ describe('extractSegments', () => {
       { id: 'seg-2', text: 'Paragraph two.' },
     ]);
   });
+
+  it('excludes text from blocked descendants inside selected nodes', () => {
+    document.body.innerHTML = `
+      <article>
+        <p>Keep this <code>drop this</code> text.</p>
+        <blockquote>Visible <pre>hidden block</pre> content.</blockquote>
+      </article>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Keep this  text.' },
+      { id: 'seg-1', text: 'Visible  content.' },
+    ]);
+  });
 });
