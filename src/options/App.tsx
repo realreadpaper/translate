@@ -9,6 +9,22 @@ type AppProps = {
 
 export function App({ initialSettings, saveSettings }: AppProps) {
   const [settings, setSettings] = useState(initialSettings);
+  const [saving, setSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+
+  async function handleSave() {
+    setSaving(true);
+    setStatusMessage('');
+
+    try {
+      await saveSettings(settings);
+      setStatusMessage('保存成功');
+    } catch {
+      setStatusMessage('保存失败');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <main>
@@ -43,6 +59,7 @@ export function App({ initialSettings, saveSettings }: AppProps) {
         OpenAI API Key
         <input
           aria-label="OpenAI API Key"
+          type="password"
           value={settings.providers['openai-compatible'].apiKey}
           onChange={(event) =>
             setSettings({
@@ -96,9 +113,10 @@ export function App({ initialSettings, saveSettings }: AppProps) {
           }
         />
       </label>
-      <button type="button" onClick={() => saveSettings(settings)}>
+      <button type="button" disabled={saving} onClick={() => void handleSave()}>
         保存设置
       </button>
+      {statusMessage ? <p>{statusMessage}</p> : null}
     </main>
   );
 }

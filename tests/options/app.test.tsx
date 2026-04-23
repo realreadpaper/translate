@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/options/App';
@@ -6,9 +6,18 @@ import { createDefaultSettings } from '../../src/shared/config';
 
 describe('Options App', () => {
   it('edits languages and provider credentials and saves settings', async () => {
-    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    let resolveSave: (() => void) | undefined;
+    const saveSettings = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
 
     render(<App initialSettings={createDefaultSettings()} saveSettings={saveSettings} />);
+
+    const apiKeyInput = screen.getByLabelText('OpenAI API Key');
+    expect((apiKeyInput as HTMLInputElement).type).toBe('password');
 
     fireEvent.change(screen.getByLabelText('源语言'), {
       target: { value: 'en' },
@@ -25,7 +34,10 @@ describe('Options App', () => {
     fireEvent.change(screen.getByLabelText('OpenAI Model'), {
       target: { value: 'gpt-4.1-mini' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存设置' }));
+    const saveButton = screen.getByRole('button', { name: '保存设置' });
+    fireEvent.click(saveButton);
+
+    expect((saveButton as HTMLButtonElement).disabled).toBe(true);
 
     expect(saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -40,5 +52,12 @@ describe('Options App', () => {
         }),
       }),
     );
+
+    resolveSave?.();
+
+    await waitFor(() => {
+      expect((saveButton as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.getByText('保存成功')).toBeTruthy();
+    });
   });
 });

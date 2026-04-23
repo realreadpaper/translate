@@ -11,7 +11,12 @@ async function bootstrap() {
     throw new Error('Options root element "#root" was not found.');
   }
 
-  const initialSettings = await loadSettings().catch(() => createDefaultSettings());
+  let initialSettings = createDefaultSettings();
+  try {
+    initialSettings = await loadSettings();
+  } catch (error) {
+    console.error(error);
+  }
 
   ReactDOM.createRoot(rootElement).render(
     <StrictMode>
