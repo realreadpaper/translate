@@ -25,5 +25,17 @@ describe('Popup App', () => {
         displayMode: 'translated-only',
       });
     });
+
+    expect(getActiveTabId).toHaveBeenCalledTimes(2);
+    expect(sendRuntimeMessage).toHaveBeenCalledTimes(2);
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(1, {
+      type: 'START_PAGE_TRANSLATION',
+      tabId: 3,
+    });
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'SET_DISPLAY_MODE',
+      tabId: 3,
+      displayMode: 'translated-only',
+    });
   });
 });

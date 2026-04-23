@@ -3,12 +3,20 @@ import ReactDOM from 'react-dom/client';
 
 import { App } from './App';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error('Popup root element "#root" was not found.');
+}
+
+ReactDOM.createRoot(rootElement).render(
   <StrictMode>
     <App
       getActiveTabId={async () => {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        return tab.id!;
+        if (typeof tab?.id !== 'number') {
+          throw new Error('Active tab id is unavailable.');
+        }
+        return tab.id;
       }}
       sendRuntimeMessage={(message) => chrome.runtime.sendMessage(message)}
     />
