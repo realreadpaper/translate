@@ -20,14 +20,18 @@ beforeEach(() => {
 });
 
 describe('settings storage', () => {
-  it('loads defaults when nothing has been saved', async () => {
-    await expect(loadSettings()).resolves.toEqual(createDefaultSettings());
+  it('loads defaults and persists them when nothing has been saved', async () => {
+    const defaults = createDefaultSettings();
+
+    await expect(loadSettings()).resolves.toEqual(defaults);
+    expect(store.get('immersive-ai-translate.settings')).toEqual(defaults);
   });
 
   it('persists and reloads settings', async () => {
     const settings = {
       ...createDefaultSettings(),
       targetLanguage: 'ja',
+      autoTranslateOnLoad: true,
     };
 
     await saveSettings(settings);

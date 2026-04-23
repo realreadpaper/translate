@@ -2,7 +2,8 @@
   "compilerOptions": {
     "composite": true,
     "module": "ESNext",
-    "moduleResolution": "Node"
+    "moduleResolution": "Bundler",
+    "types": ["node", "chrome"]
   },
   "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "src/manifest.ts"]
 }

@@ -43,6 +43,12 @@ function isStartPageTranslationMessage(
   return message.type === 'START_PAGE_TRANSLATION';
 }
 
+function hasTabId(
+  message: StartPageTranslationMessage,
+): message is StartPageTranslationMessage & { tabId: number } {
+  return typeof message.tabId === 'number';
+}
+
 export function createMessageHandler({
   sendMessageToTab,
   translatePage,
@@ -53,6 +59,10 @@ export function createMessageHandler({
   ): Promise<PageTranslationFinishedMessage> {
     if (!isStartPageTranslationMessage(message)) {
       throw new Error(`Unsupported message: ${message.type}`);
+    }
+
+    if (!hasTabId(message)) {
+      throw new Error('Tab id is required for page translation.');
     }
 
     const settings = await loadSettings();

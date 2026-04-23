@@ -5,7 +5,14 @@ const STORAGE_KEY = 'immersive-ai-translate.settings';
 
 export async function loadSettings(): Promise<ExtensionSettings> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return (result[STORAGE_KEY] as ExtensionSettings | undefined) ?? createDefaultSettings();
+  const savedSettings = result[STORAGE_KEY] as ExtensionSettings | undefined;
+  if (savedSettings) {
+    return savedSettings;
+  }
+
+  const defaults = createDefaultSettings();
+  await saveSettings(defaults);
+  return defaults;
 }
 
 export async function saveSettings(settings: ExtensionSettings): Promise<void> {

@@ -1,22 +1,41 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/options/App';
 import { createDefaultSettings } from '../../src/shared/config';
 
+afterEach(() => {
+  cleanup();
+});
+
 describe('Options App', () => {
-  it('edits languages and provider credentials and saves settings', async () => {
+  it('edits languages and deepseek credentials and saves settings', async () => {
     let resolveSave: (() => void) | undefined;
+    let resolveConnection: (() => void) | undefined;
     const saveSettings = vi.fn().mockImplementation(
       () =>
         new Promise<void>((resolve) => {
           resolveSave = resolve;
         }),
     );
+    const testConnection = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConnection = resolve;
+        }),
+    );
 
-    render(<App initialSettings={createDefaultSettings()} saveSettings={saveSettings} />);
+    render(
+      <App
+        initialSettings={createDefaultSettings()}
+        saveSettings={saveSettings}
+        testConnection={testConnection}
+      />,
+    );
 
-    const apiKeyInput = screen.getByLabelText('OpenAI API Key');
+    expect((screen.getByLabelText('当前服务') as HTMLSelectElement).value).toBe('deepseek');
+
+    const apiKeyInput = screen.getByLabelText('DeepSeek API Key');
     expect((apiKeyInput as HTMLInputElement).type).toBe('password');
 
     fireEvent.change(screen.getByLabelText('源语言'), {
@@ -25,15 +44,16 @@ describe('Options App', () => {
     fireEvent.change(screen.getByLabelText('目标语言'), {
       target: { value: 'ja' },
     });
-    fireEvent.change(screen.getByLabelText('OpenAI API Key'), {
+    fireEvent.change(screen.getByLabelText('DeepSeek API Key'), {
       target: { value: 'sk-test' },
     });
-    fireEvent.change(screen.getByLabelText('OpenAI Base URL'), {
+    fireEvent.change(screen.getByLabelText('DeepSeek Base URL'), {
       target: { value: 'https://example.com/v1' },
     });
-    fireEvent.change(screen.getByLabelText('OpenAI Model'), {
-      target: { value: 'gpt-4.1-mini' },
+    fireEvent.change(screen.getByLabelText('DeepSeek Model'), {
+      target: { value: 'deepseek-chat' },
     });
+    fireEvent.click(screen.getByLabelText('页面加载后自动翻译'));
     const saveButton = screen.getByRole('button', { name: '保存设置' });
     fireEvent.click(saveButton);
 
@@ -41,13 +61,15 @@ describe('Options App', () => {
 
     expect(saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({
+        providerId: 'deepseek',
         sourceLanguage: 'en',
         targetLanguage: 'ja',
+        autoTranslateOnLoad: true,
         providers: expect.objectContaining({
-          'openai-compatible': expect.objectContaining({
+          deepseek: expect.objectContaining({
             apiKey: 'sk-test',
             baseUrl: 'https://example.com/v1',
-            model: 'gpt-4.1-mini',
+            model: 'deepseek-chat',
           }),
         }),
       }),
@@ -59,5 +81,29 @@ describe('Options App', () => {
       expect((saveButton as HTMLButtonElement).disabled).toBe(false);
       expect(screen.getByText('保存成功')).toBeTruthy();
     });
+
+    const connectionButton = screen.getByRole('button', { name: '测试连接' });
+    fireEvent.click(connectionButton);
+
+    expect((connectionButton as HTMLButtonElement).disabled).toBe(true);
+    expect(testConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'deepseek',
+        providers: expect.objectContaining({
+          deepseek: expect.objectContaining({
+            apiKey: 'sk-test',
+          }),
+        }),
+      }),
+    );
+
+    resolveConnection?.();
+
+    await waitFor(() => {
+      expect((connectionButton as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.getByText('连接成功')).toBeTruthy();
+    });
+
+    expect((screen.getByLabelText('页面加载后自动翻译') as HTMLInputElement).checked).toBe(true);
   });
 });

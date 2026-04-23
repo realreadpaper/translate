@@ -5,6 +5,7 @@ export function extractSegments(root: HTMLElement): Array<{ id: string; text: st
   const elements = Array.from(root.querySelectorAll('h1, h2, h3, p, li, blockquote'));
 
   return elements
+    .filter((element) => !element.closest('[data-immersive-ignore="true"]'))
     .filter((element) => !BLOCKED_TAGS.has(element.tagName))
     .map((element) => {
       const clone = element.cloneNode(true) as HTMLElement;

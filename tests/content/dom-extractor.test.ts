@@ -34,4 +34,18 @@ describe('extractSegments', () => {
       { id: 'seg-1', text: 'Visible  content.' },
     ]);
   });
+
+  it('ignores immersive translate controls from extracted segments', () => {
+    document.body.innerHTML = `
+      <article>
+        <p>Hello world</p>
+        <div data-immersive-ignore="true">
+          <button>译</button>
+          <p>当前模式：双语</p>
+        </div>
+      </article>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([{ id: 'seg-0', text: 'Hello world' }]);
+  });
 });

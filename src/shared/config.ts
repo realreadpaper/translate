@@ -1,11 +1,21 @@
 import type { ExtensionSettings } from './types';
 
-export function createDefaultSettings(): ExtensionSettings {
+type BuildTimeDefaults = {
+  VITE_DEFAULT_PROVIDER_ID?: string;
+  VITE_DEFAULT_TARGET_LANGUAGE?: string;
+  VITE_DEFAULT_DEEPSEEK_API_KEY?: string;
+  VITE_DEFAULT_DEEPSEEK_MODEL?: string;
+};
+
+export function createDefaultSettings(
+  env: BuildTimeDefaults = import.meta.env as BuildTimeDefaults,
+): ExtensionSettings {
   return {
-    providerId: 'openai-compatible',
+    providerId: env.VITE_DEFAULT_PROVIDER_ID === 'deepseek' ? 'deepseek' : 'deepseek',
     sourceLanguage: 'auto',
-    targetLanguage: 'zh-CN',
+    targetLanguage: env.VITE_DEFAULT_TARGET_LANGUAGE || 'zh-CN',
     displayMode: 'bilingual',
+    autoTranslateOnLoad: false,
     providers: {
       'openai-compatible': {
         apiKey: '',
@@ -13,9 +23,9 @@ export function createDefaultSettings(): ExtensionSettings {
         model: 'gpt-4o-mini',
       },
       deepseek: {
-        apiKey: '',
+        apiKey: env.VITE_DEFAULT_DEEPSEEK_API_KEY || '',
         baseUrl: 'https://api.deepseek.com/v1',
-        model: 'deepseek-chat',
+        model: env.VITE_DEFAULT_DEEPSEEK_MODEL || 'deepseek-chat',
       },
       traditional: {
         apiKey: '',

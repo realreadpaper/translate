@@ -30,5 +30,6 @@ export type ExtensionSettings = {
   sourceLanguage: string;
   targetLanguage: string;
   displayMode: DisplayMode;
+  autoTranslateOnLoad: boolean;
   providers: ProviderSettingsById;
 };
