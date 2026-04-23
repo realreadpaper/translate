@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "package:release": "npm run build && mkdir -p releases && VERSION=$(node -p \"JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version\") && zip -qr \"releases/immersive-ai-translate-v$VERSION.zip\" dist",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
