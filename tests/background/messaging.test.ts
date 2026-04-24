@@ -33,7 +33,7 @@ describe('createMessageHandler', () => {
         deepseek: {
           apiKey: '',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         traditional: {
           apiKey: '',
@@ -109,7 +109,7 @@ describe('createMessageHandler', () => {
         deepseek: {
           apiKey: 'test-key',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         traditional: {
           apiKey: '',

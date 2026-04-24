@@ -51,7 +51,7 @@ describe('Options App', () => {
       target: { value: 'https://example.com/v1' },
     });
     fireEvent.change(screen.getByLabelText('DeepSeek Model'), {
-      target: { value: 'deepseek-chat' },
+      target: { value: 'deepseek-v4-flash' },
     });
     fireEvent.click(screen.getByLabelText('页面加载后自动翻译'));
     const saveButton = screen.getByRole('button', { name: '保存设置' });
@@ -69,7 +69,7 @@ describe('Options App', () => {
           deepseek: expect.objectContaining({
             apiKey: 'sk-test',
             baseUrl: 'https://example.com/v1',
-            model: 'deepseek-chat',
+            model: 'deepseek-v4-flash',
           }),
         }),
       }),

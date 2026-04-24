@@ -40,7 +40,7 @@ test('translates a page and switches between bilingual, original-only, and trans
             deepseek: {
               apiKey: '',
               baseUrl: 'https://api.deepseek.com/v1',
-              model: 'deepseek-chat',
+              model: 'deepseek-v4-flash',
             },
             traditional: {
               apiKey: '',

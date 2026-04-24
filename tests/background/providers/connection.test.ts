@@ -10,7 +10,7 @@ describe('testProviderConnection', () => {
         {
           apiKey: '',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         vi.fn(),
       ),
@@ -37,7 +37,7 @@ describe('testProviderConnection', () => {
         {
           apiKey: 'test-key',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         transport,
       ),
@@ -64,7 +64,7 @@ describe('testProviderConnection', () => {
         {
           apiKey: 'test-key',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         transport,
       ),
@@ -86,7 +86,7 @@ describe('testProviderConnection', () => {
         {
           apiKey: 'bad-key',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         transport,
       ),
@@ -108,7 +108,7 @@ describe('testProviderConnection', () => {
         {
           apiKey: 'test-key',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         transport,
       ),

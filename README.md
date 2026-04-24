@@ -35,7 +35,7 @@ npm run build
 ```bash
 VITE_DEFAULT_PROVIDER_ID=deepseek
 VITE_DEFAULT_DEEPSEEK_API_KEY=你的 DeepSeek Key
-VITE_DEFAULT_DEEPSEEK_MODEL=deepseek-chat
+VITE_DEFAULT_DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 说明：

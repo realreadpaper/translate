@@ -112,7 +112,7 @@ describe('deepseekProvider.translateSegments', () => {
       {
         apiKey: 'deepseek-key',
         baseUrl: 'https://api.deepseek.com/v1',
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
       },
       transport,
     );
@@ -123,7 +123,7 @@ describe('deepseekProvider.translateSegments', () => {
         Authorization: 'Bearer deepseek-key',
       },
       body: {
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         messages: [
           {
             role: 'user',

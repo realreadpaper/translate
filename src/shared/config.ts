@@ -25,7 +25,7 @@ export function createDefaultSettings(
       deepseek: {
         apiKey: env.VITE_DEFAULT_DEEPSEEK_API_KEY || '',
         baseUrl: 'https://api.deepseek.com/v1',
-        model: env.VITE_DEFAULT_DEEPSEEK_MODEL || 'deepseek-chat',
+        model: env.VITE_DEFAULT_DEEPSEEK_MODEL || 'deepseek-v4-flash',
       },
       traditional: {
         apiKey: '',

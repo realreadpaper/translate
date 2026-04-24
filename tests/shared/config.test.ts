@@ -19,7 +19,7 @@ describe('createDefaultSettings', () => {
         deepseek: {
           apiKey: '',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         traditional: {
           apiKey: '',
@@ -35,7 +35,7 @@ describe('createDefaultSettings', () => {
         VITE_DEFAULT_PROVIDER_ID: 'deepseek',
         VITE_DEFAULT_TARGET_LANGUAGE: 'en',
         VITE_DEFAULT_DEEPSEEK_API_KEY: 'local-key',
-        VITE_DEFAULT_DEEPSEEK_MODEL: 'deepseek-chat',
+        VITE_DEFAULT_DEEPSEEK_MODEL: 'deepseek-v4-flash',
       }),
     ).toEqual({
       providerId: 'deepseek',
@@ -52,7 +52,7 @@ describe('createDefaultSettings', () => {
         deepseek: {
           apiKey: 'local-key',
           baseUrl: 'https://api.deepseek.com/v1',
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
         },
         traditional: {
           apiKey: '',
