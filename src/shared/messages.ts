@@ -64,6 +64,10 @@ export type TranslationJobStartedMessage =
       workspaceTabId: number;
     };
 
+export type TranslationJobResponseMessage =
+  | PageTranslationFinishedMessage
+  | TranslationJobStartedMessage;
+
 export type TestProviderConnectionResultMessage =
   | {
       type: 'TEST_PROVIDER_CONNECTION_RESULT';

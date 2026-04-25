@@ -1,10 +1,13 @@
 import type { ExtensionSettings } from '../shared/types';
 import type {
   ApplyPageTranslationMessage,
+  ApplyTranslationResultMessage,
   CollectPageSegmentsMessage,
-  PageTranslationFinishedMessage,
+  TranslationJobResponseMessage,
   StartPageTranslationMessage,
+  StartTranslationJobMessage,
 } from '../shared/messages';
+import type { TranslationTarget } from '../shared/translation-target';
 
 type SourceSegment = { id: string; text: string };
 
@@ -24,6 +27,7 @@ type TranslateContext = {
 type SendMessageToTab = {
   (tabId: number, message: CollectPageSegmentsMessage): Promise<SourceSegment[]>;
   (tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
+  (tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
 };
 
 type MessageHandlerDependencies = {
@@ -33,9 +37,11 @@ type MessageHandlerDependencies = {
     context: TranslateContext,
   ) => Promise<TranslationResult>;
   loadSettings: () => Promise<ExtensionSettings>;
+  detectTarget: (tabId: number) => Promise<TranslationTarget>;
+  openPdfWorkspace: (target: TranslationTarget, settings: ExtensionSettings) => Promise<number>;
 };
 
-type IncomingMessage = StartPageTranslationMessage | { type: string };
+type IncomingMessage = StartPageTranslationMessage | StartTranslationJobMessage | { type: string };
 
 function isStartPageTranslationMessage(
   message: IncomingMessage,
@@ -43,9 +49,15 @@ function isStartPageTranslationMessage(
   return message.type === 'START_PAGE_TRANSLATION';
 }
 
+function isStartTranslationJobMessage(
+  message: IncomingMessage,
+): message is StartTranslationJobMessage {
+  return message.type === 'START_TRANSLATION_JOB';
+}
+
 function hasTabId(
-  message: StartPageTranslationMessage,
-): message is StartPageTranslationMessage & { tabId: number } {
+  message: StartPageTranslationMessage | StartTranslationJobMessage,
+): message is (StartPageTranslationMessage | StartTranslationJobMessage) & { tabId: number } {
   return typeof message.tabId === 'number';
 }
 
@@ -53,11 +65,13 @@ export function createMessageHandler({
   sendMessageToTab,
   translatePage,
   loadSettings,
+  detectTarget,
+  openPdfWorkspace,
 }: MessageHandlerDependencies) {
   return async function handleMessage(
     message: IncomingMessage,
-  ): Promise<PageTranslationFinishedMessage> {
-    if (!isStartPageTranslationMessage(message)) {
+  ): Promise<TranslationJobResponseMessage> {
+    if (!isStartPageTranslationMessage(message) && !isStartTranslationJobMessage(message)) {
       throw new Error(`Unsupported message: ${message.type}`);
     }
 
@@ -66,6 +80,18 @@ export function createMessageHandler({
     }
 
     const settings = await loadSettings();
+    const target = await detectTarget(message.tabId);
+
+    if (target.kind === 'pdf-document') {
+      const workspaceTabId = await openPdfWorkspace(target, settings);
+
+      return {
+        type: 'TRANSLATION_JOB_REDIRECTED',
+        target,
+        workspaceTabId,
+      };
+    }
+
     const segments = await sendMessageToTab(message.tabId, { type: 'COLLECT_PAGE_SEGMENTS' });
     const translationResult = await translatePage(segments, {
       providerId: settings.providerId,
@@ -75,13 +101,15 @@ export function createMessageHandler({
     });
 
     await sendMessageToTab(message.tabId, {
-      type: 'APPLY_PAGE_TRANSLATION',
+      type: 'APPLY_TRANSLATION_RESULT',
+      target,
       translated: translationResult.translated,
       displayMode: settings.displayMode,
     });
 
     return {
       type: 'PAGE_TRANSLATION_FINISHED',
+      target,
       status: translationResult.status,
       translated: translationResult.translated,
       failedBatches: translationResult.failedBatches,

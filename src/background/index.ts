@@ -2,12 +2,15 @@ import { createMessageHandler } from './messaging';
 import { testProviderConnection } from './providers/connection';
 import { getProvider } from './providers/registry';
 import { postJson } from './providers/transport';
+import { detectTranslationTarget } from './targets/detect-target';
 import { translatePageSegments } from './translator/translate-page';
 import { loadSettings } from '../storage/settings';
 import type {
   ApplyPageTranslationMessage,
+  ApplyTranslationResultMessage,
   CollectPageSegmentsMessage,
   StartPageTranslationMessage,
+  StartTranslationJobMessage,
   SetDisplayModeMessage,
   TestProviderConnectionMessage,
 } from '../shared/messages';
@@ -16,12 +19,14 @@ import type {
   OpenAICompatibleProviderSettings,
   TraditionalProviderSettings,
 } from '../shared/types';
+import type { TranslationTarget } from '../shared/translation-target';
 
 const DEFAULT_BATCH_SIZE = 20;
 
 type SendMessageToTab = {
   (tabId: number, message: CollectPageSegmentsMessage): Promise<Array<{ id: string; text: string }>>;
   (tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
+  (tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
   (tabId: number, message: SetDisplayModeMessage): Promise<void>;
 };
 
@@ -91,10 +96,15 @@ function sendMessageToTab(
   message: CollectPageSegmentsMessage,
 ): Promise<Array<{ id: string; text: string }>>;
 function sendMessageToTab(tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
+function sendMessageToTab(tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
 function sendMessageToTab(tabId: number, message: SetDisplayModeMessage): Promise<void>;
 function sendMessageToTab(
   tabId: number,
-  message: CollectPageSegmentsMessage | ApplyPageTranslationMessage | SetDisplayModeMessage,
+  message:
+    | CollectPageSegmentsMessage
+    | ApplyPageTranslationMessage
+    | ApplyTranslationResultMessage
+    | SetDisplayModeMessage,
 ) {
   return chrome.tabs.sendMessage(tabId, message) as Promise<
     Array<{ id: string; text: string }> | void
@@ -105,6 +115,11 @@ const handler = createMessageHandler({
   sendMessageToTab,
   translatePage,
   loadSettings,
+  detectTarget: async (tabId) => {
+    const tab = await chrome.tabs.get(tabId);
+    return detectTranslationTarget(tab);
+  },
+  openPdfWorkspace: async (target, settings) => openPdfTranslationWorkspace(target, settings),
 });
 
 function isSetDisplayModeMessage(message: unknown): message is SetDisplayModeMessage {
@@ -125,6 +140,15 @@ function isStartPageTranslationMessage(message: unknown): message is StartPageTr
   );
 }
 
+function isStartTranslationJobMessage(message: unknown): message is StartTranslationJobMessage {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'type' in message &&
+    message.type === 'START_TRANSLATION_JOB'
+  );
+}
+
 function isTestProviderConnectionMessage(
   message: unknown,
 ): message is TestProviderConnectionMessage {
@@ -141,7 +165,10 @@ chrome.runtime.onMessage.addListener((
   sender: chrome.runtime.MessageSender,
   sendResponse: (response?: unknown) => void,
 ) => {
-  if (isStartPageTranslationMessage(message) && typeof message.tabId !== 'number') {
+  if (
+    (isStartPageTranslationMessage(message) || isStartTranslationJobMessage(message)) &&
+    typeof message.tabId !== 'number'
+  ) {
     if (typeof sender.tab?.id !== 'number') {
       sendResponse({
         type: 'PAGE_TRANSLATION_FAILED',
@@ -222,3 +249,18 @@ chrome.runtime.onMessage.addListener((
 
   return true;
 });
+
+async function openPdfTranslationWorkspace(
+  target: TranslationTarget,
+  _settings: {
+    targetLanguage: string;
+  },
+) {
+  if (target.kind !== 'pdf-document') {
+    throw new Error('PDF workspace can only be opened for pdf-document targets.');
+  }
+
+  const url = chrome.runtime.getURL(`src/pdf-viewer/index.html?source=${encodeURIComponent(target.url)}`);
+  const createdTab = await chrome.tabs.create({ url });
+  return createdTab.id ?? -1;
+}
