@@ -14,7 +14,7 @@ export const manifest: StaticManifest = {
     service_worker: 'src/background/index.ts',
     type: 'module',
   },
-  permissions: ['storage', 'activeTab', 'scripting', 'tabs'],
+  permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'offscreen', 'tabCapture'],
   host_permissions: ['<all_urls>'],
   content_scripts: [
     {
@@ -26,6 +26,10 @@ export const manifest: StaticManifest = {
   web_accessible_resources: [
     {
       resources: ['src/pdf-viewer/index.html'],
+      matches: ['<all_urls>'],
+    },
+    {
+      resources: ['src/offscreen/index.html'],
       matches: ['<all_urls>'],
     },
   ],

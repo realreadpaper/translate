@@ -32,6 +32,9 @@ export function mountYoutubeSubtitleOverlay(
             ? translatedText ?? ''
             : `${cue.text}\n${translatedText ?? ''}`;
     },
+    renderPrompt(message: string) {
+      host.textContent = message;
+    },
     unmount() {
       host.remove();
     },

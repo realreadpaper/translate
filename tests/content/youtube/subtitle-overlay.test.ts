@@ -37,4 +37,17 @@ describe('mountYoutubeSubtitleOverlay', () => {
     expect(document.body.textContent).not.toContain('Hello');
     expect(document.body.textContent).toContain('你好');
   });
+
+  it('shows a readable prompt when subtitles are unavailable and ASR requires confirmation', () => {
+    const overlay = mountYoutubeSubtitleOverlay(document.body, {
+      displayStyle: 'overlay-bottom',
+      getOriginalCue: () => null,
+      getTranslatedText: () => null,
+      getDisplayMode: () => 'bilingual',
+    });
+
+    overlay.renderPrompt('当前视频没有可用字幕，是否启用语音识别生成字幕？');
+
+    expect(document.body.textContent).toContain('当前视频没有可用字幕，是否启用语音识别生成字幕？');
+  });
 });
