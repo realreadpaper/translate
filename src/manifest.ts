@@ -23,4 +23,10 @@ export const manifest: StaticManifest = {
       run_at: 'document_idle',
     },
   ],
+  web_accessible_resources: [
+    {
+      resources: ['src/pdf-viewer/index.html'],
+      matches: ['<all_urls>'],
+    },
+  ],
 };

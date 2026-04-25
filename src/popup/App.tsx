@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type {
   PageTranslationFailedMessage,
   PageTranslationFinishedMessage,
+  TranslationJobStartedMessage,
 } from '../shared/messages';
 import type { DisplayMode } from '../shared/types';
 
@@ -14,7 +15,10 @@ type RuntimeMessage =
       displayMode: DisplayMode;
     };
 
-type TranslationResponse = PageTranslationFinishedMessage | PageTranslationFailedMessage;
+type TranslationResponse =
+  | PageTranslationFinishedMessage
+  | TranslationJobStartedMessage
+  | PageTranslationFailedMessage;
 
 type AppProps = {
   getActiveTabId: () => Promise<number>;
@@ -60,6 +64,16 @@ export function App({
 
       if (response.type === 'PAGE_TRANSLATION_FAILED') {
         setStatusMessage(`翻译失败：${response.message}`);
+        return;
+      }
+
+      if (response.type === 'TRANSLATION_JOB_REDIRECTED' && response.target.kind === 'pdf-document') {
+        setStatusMessage(`已在新标签页打开 ${response.target.displayName} 的 PDF 翻译工作台`);
+        return;
+      }
+
+      if (response.type !== 'PAGE_TRANSLATION_FINISHED') {
+        setStatusMessage('翻译任务已启动');
         return;
       }
 

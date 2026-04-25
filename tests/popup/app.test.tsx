@@ -156,4 +156,38 @@ describe('Popup App', () => {
       expect(screen.getByText('已开启：进入页面后自动翻译')).toBeTruthy();
     });
   });
+
+  it('shows a redirect message when standalone pdf translation opens a dedicated workspace', async () => {
+    const getActiveTabId = vi.fn().mockResolvedValue(3);
+    const updateAutoTranslateOnLoad = vi.fn().mockResolvedValue(undefined);
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        type: 'TRANSLATION_JOB_REDIRECTED',
+        target: {
+          kind: 'pdf-document',
+          tabId: 3,
+          url: 'https://example.com/report.pdf',
+          sourceKind: 'http-url',
+          displayName: 'report.pdf',
+        },
+        workspaceTabId: 11,
+      })
+      .mockResolvedValue(undefined);
+
+    render(
+      <App
+        getActiveTabId={getActiveTabId}
+        sendRuntimeMessage={sendRuntimeMessage}
+        autoTranslateOnLoad={false}
+        updateAutoTranslateOnLoad={updateAutoTranslateOnLoad}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '立即翻译当前页面' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('已在新标签页打开 report.pdf 的 PDF 翻译工作台')).toBeTruthy();
+    });
+  });
 });
