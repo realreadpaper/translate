@@ -32,6 +32,12 @@ describe('settings storage', () => {
       ...createDefaultSettings(),
       targetLanguage: 'ja',
       autoTranslateOnLoad: true,
+      enableYoutubeSubtitleTranslation: false,
+      enablePdfDocumentTranslation: true,
+      pdfOcrFallback: 'disabled' as const,
+      youtubeAsrFallback: 'confirm-first' as const,
+      subtitleDisplayStyle: 'overlay-top' as const,
+      translationCacheEnabled: false,
     };
 
     await saveSettings(settings);

@@ -1,7 +1,13 @@
-import type { DisplayMode } from './types';
+import type { DisplayMode, ProviderId, ProviderSettingsById } from './types';
+import type { TranslationTarget } from './translation-target';
 
 export type StartPageTranslationMessage = {
   type: 'START_PAGE_TRANSLATION';
+  tabId?: number;
+};
+
+export type StartTranslationJobMessage = {
+  type: 'START_TRANSLATION_JOB';
   tabId?: number;
 };
 
@@ -21,8 +27,16 @@ export type ApplyPageTranslationMessage = {
   displayMode: DisplayMode;
 };
 
+export type ApplyTranslationResultMessage = {
+  type: 'APPLY_TRANSLATION_RESULT';
+  target: TranslationTarget;
+  translated: Array<{ id: string; translatedText: string }>;
+  displayMode: DisplayMode;
+};
+
 export type PageTranslationFinishedMessage = {
   type: 'PAGE_TRANSLATION_FINISHED';
+  target?: TranslationTarget;
   status: 'success' | 'partial-success';
   translated: Array<{ id: string; translatedText: string }>;
   failedBatches: Array<{ segmentIds: string[]; message: string }>;
@@ -35,9 +49,20 @@ export type PageTranslationFailedMessage = {
 
 export type TestProviderConnectionMessage = {
   type: 'TEST_PROVIDER_CONNECTION';
-  providerId: DisplayMode extends never ? never : import('./types').ProviderId;
-  providerSettings: import('./types').ProviderSettingsById[import('./types').ProviderId];
+  providerId: ProviderId;
+  providerSettings: ProviderSettingsById[ProviderId];
 };
+
+export type TranslationJobStartedMessage =
+  | {
+      type: 'TRANSLATION_JOB_STARTED';
+      target: TranslationTarget;
+    }
+  | {
+      type: 'TRANSLATION_JOB_REDIRECTED';
+      target: TranslationTarget;
+      workspaceTabId: number;
+    };
 
 export type TestProviderConnectionResultMessage =
   | {

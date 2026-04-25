@@ -10,6 +10,12 @@ describe('createDefaultSettings', () => {
       targetLanguage: 'zh-CN',
       displayMode: 'bilingual',
       autoTranslateOnLoad: false,
+      enableYoutubeSubtitleTranslation: true,
+      enablePdfDocumentTranslation: true,
+      pdfOcrFallback: 'confirm-first',
+      youtubeAsrFallback: 'confirm-first',
+      subtitleDisplayStyle: 'overlay-bottom',
+      translationCacheEnabled: true,
       providers: {
         'openai-compatible': {
           apiKey: '',
@@ -43,6 +49,12 @@ describe('createDefaultSettings', () => {
       targetLanguage: 'en',
       displayMode: 'bilingual',
       autoTranslateOnLoad: false,
+      enableYoutubeSubtitleTranslation: true,
+      enablePdfDocumentTranslation: true,
+      pdfOcrFallback: 'confirm-first',
+      youtubeAsrFallback: 'confirm-first',
+      subtitleDisplayStyle: 'overlay-bottom',
+      translationCacheEnabled: true,
       providers: {
         'openai-compatible': {
           apiKey: '',
