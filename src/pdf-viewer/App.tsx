@@ -6,6 +6,7 @@ type PdfViewerPage = {
   pageNumber: number;
   originalText: string;
   translatedText: string;
+  needsOcr?: boolean;
 };
 
 type PdfViewerAppProps = {
@@ -43,6 +44,7 @@ export function App({ loadJob }: PdfViewerAppProps) {
       <section className="pdf-viewer-body">
         {documentState.pages.map((page) => (
           <section className="pdf-viewer-page" key={page.pageNumber}>
+            {page.needsOcr ? <p>{`第 ${page.pageNumber} 页需要 OCR 才能继续翻译`}</p> : null}
             {mode !== 'translated-only' ? <article>{page.originalText}</article> : null}
             {mode !== 'original-only' ? <article>{page.translatedText}</article> : null}
           </section>
