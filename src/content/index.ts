@@ -8,6 +8,10 @@ import { loadSettings } from '../storage/settings';
 import { extractSegments } from './dom-extractor';
 import { mountFloatingBall } from './floating-ball';
 import { applyTranslations, setDisplayMode } from './segment-renderer';
+import { isYoutubeWatchPage } from './youtube/detect-target';
+import { mountYoutubeSubtitleOverlay } from './youtube/subtitle-overlay';
+import { collectYoutubeSubtitleCues } from './youtube/subtitle-source';
+import { findActiveCue, type SubtitleCue } from './youtube/subtitle-timeline';
 
 type IncomingMessage =
   | CollectPageSegmentsMessage
@@ -15,6 +19,22 @@ type IncomingMessage =
   | ApplyTranslationResultMessage
   | SetDisplayModeMessage
   | { type: string };
+
+type YoutubeOverlayController = ReturnType<typeof mountYoutubeSubtitleOverlay> | null;
+
+const youtubeState: {
+  cues: SubtitleCue[];
+  translatedById: Map<string, string>;
+  currentMode: 'bilingual' | 'translated-only' | 'original-only';
+  overlay: YoutubeOverlayController;
+  listenerAttached: boolean;
+} = {
+  cues: [],
+  translatedById: new Map<string, string>(),
+  currentMode: 'bilingual',
+  overlay: null,
+  listenerAttached: false,
+};
 
 function isApplyPageTranslationMessage(
   message: IncomingMessage,
@@ -49,6 +69,54 @@ function ensureTaggedSegments(root: HTMLElement) {
   tagSegments(root);
 }
 
+function isYoutubeSubtitleDocument() {
+  return typeof window !== 'undefined' && isYoutubeWatchPage(window.location.href);
+}
+
+async function collectCurrentYoutubeSegments() {
+  const cues = await collectYoutubeSubtitleCues(document);
+  youtubeState.cues = cues;
+
+  return cues.map((cue) => ({
+    id: cue.id,
+    text: cue.text,
+  }));
+}
+
+function getCurrentVideoElement() {
+  return document.querySelector('video') as HTMLVideoElement | null;
+}
+
+function ensureYoutubeOverlay(root: HTMLElement) {
+  if (youtubeState.overlay) {
+    return youtubeState.overlay;
+  }
+
+  youtubeState.overlay = mountYoutubeSubtitleOverlay(root, {
+    displayStyle: 'overlay-bottom',
+    getOriginalCue: () => {
+      const video = getCurrentVideoElement();
+      if (!video) {
+        return null;
+      }
+
+      return findActiveCue(youtubeState.cues, video.currentTime);
+    },
+    getTranslatedText: (cueId) => youtubeState.translatedById.get(cueId) ?? null,
+    getDisplayMode: () => youtubeState.currentMode,
+  });
+
+  const video = getCurrentVideoElement();
+  if (video && !youtubeState.listenerAttached) {
+    const rerender = () => youtubeState.overlay?.render();
+    video.addEventListener('timeupdate', rerender);
+    video.addEventListener('seeked', rerender);
+    youtubeState.listenerAttached = true;
+  }
+
+  return youtubeState.overlay;
+}
+
 export function createContentMessageHandler({
   root,
   markTranslated,
@@ -60,6 +128,11 @@ export function createContentMessageHandler({
 }) {
   return (message: IncomingMessage, sendResponse: (response?: unknown) => void) => {
     if (message.type === 'COLLECT_PAGE_SEGMENTS') {
+      if (isYoutubeSubtitleDocument()) {
+        void collectCurrentYoutubeSegments().then(sendResponse);
+        return true;
+      }
+
       tagSegments(root);
       sendResponse(extractSegments(root));
       return true;
@@ -85,8 +158,23 @@ export function createContentMessageHandler({
       return true;
     }
 
+    if (isApplyTranslationResultMessage(message) && message.target.kind === 'youtube-subtitles') {
+      youtubeState.currentMode = message.displayMode;
+      youtubeState.translatedById = new Map(
+        message.translated.map((segment) => [segment.id, segment.translatedText]),
+      );
+      const overlay = ensureYoutubeOverlay(root);
+      overlay.render();
+      markTranslated(message.displayMode);
+      updateDisplayMode(message.displayMode);
+      sendResponse({ ok: true });
+      return true;
+    }
+
     if (isSetDisplayModeMessage(message)) {
       setDisplayMode(root, message.displayMode);
+      youtubeState.currentMode = message.displayMode;
+      youtubeState.overlay?.render();
       updateDisplayMode(message.displayMode);
       sendResponse({ ok: true });
       return true;

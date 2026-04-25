@@ -54,6 +54,13 @@ describe('Options App', () => {
       target: { value: 'deepseek-v4-flash' },
     });
     fireEvent.click(screen.getByLabelText('页面加载后自动翻译'));
+    fireEvent.click(screen.getByLabelText('启用 YouTube 字幕翻译'));
+    fireEvent.change(screen.getByLabelText('PDF OCR 兜底策略'), {
+      target: { value: 'disabled' },
+    });
+    fireEvent.change(screen.getByLabelText('YouTube ASR 兜底策略'), {
+      target: { value: 'disabled' },
+    });
     const saveButton = screen.getByRole('button', { name: '保存设置' });
     fireEvent.click(saveButton);
 
@@ -65,6 +72,9 @@ describe('Options App', () => {
         sourceLanguage: 'en',
         targetLanguage: 'ja',
         autoTranslateOnLoad: true,
+        enableYoutubeSubtitleTranslation: false,
+        pdfOcrFallback: 'disabled',
+        youtubeAsrFallback: 'disabled',
         providers: expect.objectContaining({
           deepseek: expect.objectContaining({
             apiKey: 'sk-test',
@@ -105,5 +115,6 @@ describe('Options App', () => {
     });
 
     expect((screen.getByLabelText('页面加载后自动翻译') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('启用 YouTube 字幕翻译') as HTMLInputElement).checked).toBe(false);
   });
 });

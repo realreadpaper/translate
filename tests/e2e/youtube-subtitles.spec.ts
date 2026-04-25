@@ -5,9 +5,9 @@ import path from 'node:path';
 
 const SETTINGS_KEY = 'immersive-ai-translate.settings';
 
-test('translates a page and switches between bilingual, original-only, and translated-only modes from the floating ball', async () => {
+test('renders bilingual subtitles on a youtube watch page fixture', async () => {
   const pathToExtension = path.resolve('dist');
-  const userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'immersive-ai-translate-'));
+  const userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'immersive-ai-translate-youtube-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
     args: [
@@ -22,7 +22,6 @@ test('translates a page and switches between bilingual, original-only, and trans
       background = await context.waitForEvent('serviceworker');
     }
 
-    const extensionId = new URL(background.url()).host;
     await background.evaluate(async ({ storageKey }) => {
       await chrome.storage.local.set({
         [storageKey]: {
@@ -39,7 +38,7 @@ test('translates a page and switches between bilingual, original-only, and trans
           translationCacheEnabled: true,
           providers: {
             'openai-compatible': {
-              apiKey: 'test-key',
+              apiKey: '',
               baseUrl: 'https://api.openai.com/v1',
               model: 'gpt-4o-mini',
             },
@@ -58,24 +57,34 @@ test('translates a page and switches between bilingual, original-only, and trans
     }, { storageKey: SETTINGS_KEY });
 
     const page = await context.newPage();
-    await page.goto('http://127.0.0.1:4173/article.html');
+    const youtubeUrl = 'https://www.youtube.com/watch?v=demo-video';
+
+    await page.route(youtubeUrl, async (route) => {
+      await route.fulfill({
+        contentType: 'text/html',
+        body: `
+          <!doctype html>
+          <html lang="en">
+            <body>
+              <main>
+                <video controls></video>
+                <div data-start-ms="0" data-end-ms="1200">Hello world</div>
+              </main>
+            </body>
+          </html>
+        `,
+      });
+    });
+
+    await page.goto(youtubeUrl);
 
     const floatingTrigger = page.locator('[data-floating-ball-trigger]');
     await expect(floatingTrigger).toBeVisible();
     await floatingTrigger.click();
 
-    await expect(page.getByText('你好，世界')).toBeVisible();
-    await expect(page.getByText('当前模式：双语')).toBeVisible();
-
-    await page.getByRole('button', { name: '原文' }).click();
-    await expect(page.getByText('Hello world')).toBeVisible();
-    await expect(page.getByText('你好，世界')).toBeHidden();
-    await expect(page.getByText('当前模式：仅原文')).toBeVisible();
-
-    await page.getByRole('button', { name: '译文' }).click();
-    await expect(page.getByText('Hello world')).toBeHidden();
-    await expect(page.getByText('你好，世界')).toBeVisible();
-    await expect(page.getByText('当前模式：仅译文')).toBeVisible();
+    const subtitleOverlay = page.locator('[data-youtube-subtitle-overlay]');
+    await expect(subtitleOverlay).toContainText('Hello world');
+    await expect(subtitleOverlay).toContainText('你好，世界');
   } finally {
     await context.close();
     await fs.rm(userDataDir, { recursive: true, force: true });

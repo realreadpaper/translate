@@ -5,9 +5,9 @@ import path from 'node:path';
 
 const SETTINGS_KEY = 'immersive-ai-translate.settings';
 
-test('translates a page and switches between bilingual, original-only, and translated-only modes from the floating ball', async () => {
+test('opens the pdf translation workspace for standalone pdf tabs', async () => {
   const pathToExtension = path.resolve('dist');
-  const userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'immersive-ai-translate-'));
+  const userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'immersive-ai-translate-pdf-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
     args: [
@@ -21,8 +21,17 @@ test('translates a page and switches between bilingual, original-only, and trans
     if (!background) {
       background = await context.waitForEvent('serviceworker');
     }
-
     const extensionId = new URL(background.url()).host;
+
+    const pdfUrl = 'http://127.0.0.1:4173/report.pdf';
+    const page = await context.newPage();
+    await page.route(pdfUrl, async (route) => {
+      await route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body><h1>Standalone PDF placeholder</h1></body></html>',
+      });
+    });
+
     await background.evaluate(async ({ storageKey }) => {
       await chrome.storage.local.set({
         [storageKey]: {
@@ -39,7 +48,7 @@ test('translates a page and switches between bilingual, original-only, and trans
           translationCacheEnabled: true,
           providers: {
             'openai-compatible': {
-              apiKey: 'test-key',
+              apiKey: '',
               baseUrl: 'https://api.openai.com/v1',
               model: 'gpt-4o-mini',
             },
@@ -57,25 +66,39 @@ test('translates a page and switches between bilingual, original-only, and trans
       });
     }, { storageKey: SETTINGS_KEY });
 
-    const page = await context.newPage();
-    await page.goto('http://127.0.0.1:4173/article.html');
+    await page.goto(pdfUrl);
 
-    const floatingTrigger = page.locator('[data-floating-ball-trigger]');
-    await expect(floatingTrigger).toBeVisible();
-    await floatingTrigger.click();
+    const pdfTabId = await background.evaluate(async ({ targetUrl }) => {
+      const tabs = await chrome.tabs.query({});
+      const targetTab = tabs.find((tab) => tab.url === targetUrl);
+      if (!targetTab?.id) {
+        throw new Error('Failed to find PDF tab for workspace redirection.');
+      }
+      return targetTab.id;
+    }, { targetUrl: pdfUrl });
 
-    await expect(page.getByText('你好，世界')).toBeVisible();
-    await expect(page.getByText('当前模式：双语')).toBeVisible();
+    const controlPage = await context.newPage();
+    await controlPage.goto(`chrome-extension://${extensionId}/src/options/index.html`);
 
-    await page.getByRole('button', { name: '原文' }).click();
-    await expect(page.getByText('Hello world')).toBeVisible();
-    await expect(page.getByText('你好，世界')).toBeHidden();
-    await expect(page.getByText('当前模式：仅原文')).toBeVisible();
+    const [workspacePage, response] = await Promise.all([
+      context.waitForEvent('page'),
+      controlPage.evaluate(async (tabId) => chrome.runtime.sendMessage({
+        type: 'START_TRANSLATION_JOB',
+        tabId,
+      }), pdfTabId),
+    ]);
 
-    await page.getByRole('button', { name: '译文' }).click();
-    await expect(page.getByText('Hello world')).toBeHidden();
-    await expect(page.getByText('你好，世界')).toBeVisible();
-    await expect(page.getByText('当前模式：仅译文')).toBeVisible();
+    expect(response).toMatchObject({
+      type: 'TRANSLATION_JOB_REDIRECTED',
+      target: {
+        kind: 'pdf-document',
+        displayName: 'report.pdf',
+      },
+    });
+
+    await workspacePage.waitForLoadState('domcontentloaded');
+
+    await expect(workspacePage.getByText('PDF 翻译工作台')).toBeVisible();
   } finally {
     await context.close();
     await fs.rm(userDataDir, { recursive: true, force: true });

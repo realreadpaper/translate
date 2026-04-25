@@ -314,6 +314,84 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                   </span>
                 </label>
               </div>
+              <div className="field field-span-2 options-toggle-field">
+                <span>启用 YouTube 字幕翻译</span>
+                <label className="options-switch" htmlFor="enable-youtube-subtitles">
+                  <input
+                    id="enable-youtube-subtitles"
+                    aria-label="启用 YouTube 字幕翻译"
+                    type="checkbox"
+                    checked={settings.enableYoutubeSubtitleTranslation}
+                    onChange={(event) =>
+                      setSettings({
+                        ...settings,
+                        enableYoutubeSubtitleTranslation: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">
+                    开启后允许在 YouTube 视频页中翻译现成字幕，并在缺失时提示是否启用 ASR。
+                  </span>
+                </label>
+              </div>
+              <div className="field field-span-2 options-toggle-field">
+                <span>启用独立 PDF 文档翻译</span>
+                <label className="options-switch" htmlFor="enable-pdf-translation">
+                  <input
+                    id="enable-pdf-translation"
+                    aria-label="启用独立 PDF 文档翻译"
+                    type="checkbox"
+                    checked={settings.enablePdfDocumentTranslation}
+                    onChange={(event) =>
+                      setSettings({
+                        ...settings,
+                        enablePdfDocumentTranslation: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">
+                    开启后可将独立 PDF 文档跳转到扩展工作台中进行整份翻译。
+                  </span>
+                </label>
+              </div>
+              <label className="field">
+                <span>PDF OCR 兜底策略</span>
+                <select
+                  aria-label="PDF OCR 兜底策略"
+                  value={settings.pdfOcrFallback}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      pdfOcrFallback: event.target.value as ExtensionSettings['pdfOcrFallback'],
+                    })
+                  }
+                >
+                  <option value="confirm-first">按页确认后执行</option>
+                  <option value="disabled">关闭 OCR 兜底</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>YouTube ASR 兜底策略</span>
+                <select
+                  aria-label="YouTube ASR 兜底策略"
+                  value={settings.youtubeAsrFallback}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      youtubeAsrFallback: event.target.value as ExtensionSettings['youtubeAsrFallback'],
+                    })
+                  }
+                >
+                  <option value="confirm-first">确认后识别</option>
+                  <option value="disabled">关闭 ASR 兜底</option>
+                </select>
+              </label>
             </div>
           </section>
 
