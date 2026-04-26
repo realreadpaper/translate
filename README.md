@@ -1,15 +1,34 @@
 # Immersive AI Translate
 
-面向 Chrome / Edge 的沉浸式整页翻译扩展，当前默认使用 DeepSeek，本地保存配置，支持双语、仅原文、仅译文三种阅读模式。
+面向 Chrome / Edge 的沉浸式网页翻译扩展，当前默认使用 DeepSeek，本地保存配置，支持双语、仅原文、仅译文三种阅读模式。
+
+详细架构、功能说明、数据流和测试策略见：[项目说明文档](docs/project-overview.md)。
 
 ## 当前能力
 
-- 整页正文提取与批量翻译
+- 网页正文提取与批量翻译
+- 悬浮球视口优先翻译，滚动时继续翻译后续内容
 - 双语 / 原文 / 译文三种显示模式切换
 - Popup 控制台与 Options 设置工作台
+- DeepSeek、OpenAI-compatible、Traditional provider 适配
+- X / Twitter 帖子正文翻译
+- Reddit 帖子和评论正文翻译
 - DeepSeek 默认配置与本地密钥注入
+- Provider 返回结构容错，避免异常响应打断整页翻译
 - 离线稳定 E2E 测试
 - 可选真实 DeepSeek 联机冒烟测试
+
+说明：项目中已经预留 `html-page`、`youtube-subtitles`、`pdf-document` 翻译目标模型，但当前稳定可用能力聚焦 `html-page` 网页翻译。悬浮球暂时只触发网页翻译，不触发 PDF 或 YouTube 逻辑。
+
+## 技术栈
+
+- TypeScript
+- React 19
+- Vite
+- `@crxjs/vite-plugin`
+- Chrome Extension Manifest V3
+- Vitest / jsdom / React Testing Library
+- Playwright
 
 ## 本地开发
 
@@ -19,6 +38,15 @@ HOST=127.0.0.1 npm test
 HOST=127.0.0.1 npm run test:e2e -- tests/e2e/page-translation.spec.ts
 npm run build
 ```
+
+常用目录：
+
+- `src/content/`：网页注入、悬浮球、正文提取、译文回填
+- `src/background/`：background service worker、消息编排、provider 调用
+- `src/popup/`：popup 操作面板
+- `src/options/`：设置页
+- `src/shared/`：共享类型、消息协议、默认配置
+- `tests/`：单元测试、组件测试和 E2E 测试
 
 ## 浏览器装载
 
@@ -53,6 +81,32 @@ VITE_DEFAULT_DEEPSEEK_MODEL=deepseek-v4-flash
 5. 点击 `翻译当前页面`
 6. 检查 `双语 / 原文 / 译文` 三种模式切换是否符合预期
 7. 在设置页确认目标语言、模型和 Base URL 是否正确
+
+## 网页翻译体验
+
+悬浮球采用渐进式翻译：
+
+1. 点击悬浮球后，优先翻译当前视口附近内容。
+2. 单次最多发送 6 段，避免一次请求过大。
+3. 用户向下滚动时，继续翻译新进入视口附近、且尚未翻译过的段落。
+4. 译文会插入到原文节点之后，确保双语阅读时上下文仍然清晰。
+
+Popup 的手动翻译入口仍保留全页翻译行为，适合一次性处理整篇文章。
+
+## 调试日志
+
+content script 和 background service worker 均输出调试日志，统一前缀：
+
+```text
+[Immersive AI Translate]
+```
+
+可用于观察：
+
+- 页面提取到的段落数量
+- 悬浮球每批翻译的段落数量
+- background 收到的消息类型
+- 翻译完成数量和失败批次数
 
 ## 真实 DeepSeek 联机冒烟测试
 

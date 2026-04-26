@@ -30,8 +30,8 @@ describe('extractSegments', () => {
     `;
 
     expect(extractSegments(document.body)).toEqual([
-      { id: 'seg-0', text: 'Keep this  text.' },
-      { id: 'seg-1', text: 'Visible  content.' },
+      { id: 'seg-0', text: 'Keep this text.' },
+      { id: 'seg-1', text: 'Visible content.' },
     ]);
   });
 
@@ -67,5 +67,62 @@ describe('extractSegments', () => {
     expect((paragraphs[0] as HTMLElement).dataset.segmentId).toBeUndefined();
     expect((paragraphs[1] as HTMLElement).dataset.segmentId).toBe('seg-0');
     expect((paragraphs[2] as HTMLElement).dataset.segmentId).toBe('seg-1');
+  });
+
+  it('extracts X/Twitter post text containers', () => {
+    document.body.innerHTML = `
+      <main>
+        <article data-testid="tweet">
+          <div data-testid="User-Name">Someone</div>
+          <div data-testid="tweetText" lang="en">
+            <span>First line of the post.</span>
+            <span> Second line with #AI</span>
+          </div>
+          <div role="group" aria-label="Reply, Repost, Like">Actions</div>
+        </article>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'First line of the post. Second line with #AI' },
+    ]);
+
+    const tweetText = document.querySelector('[data-testid="tweetText"]') as HTMLElement;
+    expect(tweetText.dataset.segmentId).toBe('seg-0');
+  });
+
+  it('extracts Reddit post and comment body containers without actions', () => {
+    document.body.innerHTML = `
+      <main>
+        <shreddit-post>
+          <div slot="title">A useful Reddit post title</div>
+          <div slot="text-body">
+            <p>Post body first paragraph.</p>
+            <p>Post body second paragraph.</p>
+          </div>
+          <div slot="post-meta">r/example u/person</div>
+          <div slot="actionRow">Vote Reply Share</div>
+        </shreddit-post>
+        <shreddit-comment>
+          <div slot="comment">
+            <p>This is a useful comment.</p>
+          </div>
+          <div slot="commentMeta">u/commenter</div>
+        </shreddit-comment>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'A useful Reddit post title' },
+      { id: 'seg-1', text: 'Post body first paragraph. Post body second paragraph.' },
+      { id: 'seg-2', text: 'This is a useful comment.' },
+    ]);
+
+    expect(
+      (document.querySelector('[slot="text-body"]') as HTMLElement).dataset.segmentId,
+    ).toBe('seg-1');
+    expect((document.querySelector('[slot="comment"]') as HTMLElement).dataset.segmentId).toBe(
+      'seg-2',
+    );
   });
 });
