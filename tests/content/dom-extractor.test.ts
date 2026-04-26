@@ -48,4 +48,24 @@ describe('extractSegments', () => {
 
     expect(extractSegments(document.body)).toEqual([{ id: 'seg-0', text: 'Hello world' }]);
   });
+
+  it('assigns DOM segment ids to the same elements returned for translation', () => {
+    document.body.innerHTML = `
+      <article>
+        <p><code>const skipped = true</code></p>
+        <p>First visible paragraph.</p>
+        <p>Second visible paragraph.</p>
+      </article>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'First visible paragraph.' },
+      { id: 'seg-1', text: 'Second visible paragraph.' },
+    ]);
+
+    const paragraphs = Array.from(document.querySelectorAll('p'));
+    expect((paragraphs[0] as HTMLElement).dataset.segmentId).toBeUndefined();
+    expect((paragraphs[1] as HTMLElement).dataset.segmentId).toBe('seg-0');
+    expect((paragraphs[2] as HTMLElement).dataset.segmentId).toBe('seg-1');
+  });
 });

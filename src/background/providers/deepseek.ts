@@ -1,4 +1,8 @@
 import type { ProviderAdapter } from './types';
+import {
+  parseTranslatedSegments,
+  TRANSLATION_SYSTEM_PROMPT,
+} from './parse-translated-segments';
 
 export const deepseekProvider: ProviderAdapter<'deepseek'> = {
   id: 'deepseek',
@@ -26,7 +30,14 @@ export const deepseekProvider: ProviderAdapter<'deepseek'> = {
         },
         body: {
           model: settings.model,
+          thinking: {
+            type: 'disabled',
+          },
           messages: [
+            {
+              role: 'system',
+              content: TRANSLATION_SYSTEM_PROMPT,
+            },
             {
               role: 'user',
               content: JSON.stringify({
@@ -42,7 +53,7 @@ export const deepseekProvider: ProviderAdapter<'deepseek'> = {
       };
 
       const content = response.choices?.[0]?.message?.content ?? '[]';
-      const segments = JSON.parse(content) as Array<{ id: string; translatedText: string }>;
+      const segments = parseTranslatedSegments(content);
 
       return { ok: true, segments };
     } catch (error) {

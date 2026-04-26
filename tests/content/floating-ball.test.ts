@@ -5,73 +5,51 @@ import { mountFloatingBall } from '../../src/content/floating-ball';
 describe('mountFloatingBall', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    vi.useRealTimers();
   });
 
-  it('starts page translation from the floating ball and opens mode controls after success', async () => {
+  it('starts page translation from the floating ball without rendering a control panel', async () => {
     const sendRuntimeMessage = vi.fn().mockResolvedValue({
       type: 'PAGE_TRANSLATION_FINISHED',
       status: 'success',
       translated: [{ id: 'seg-0', translatedText: '你好，世界' }],
       failedBatches: [],
     });
-    const openOptionsPage = vi.fn();
 
     const controller = mountFloatingBall(document.body, {
       sendRuntimeMessage,
-      openOptionsPage,
     });
 
     const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
     expect(trigger).not.toBeNull();
     expect(trigger.dataset.state).toBe('idle');
+    expect(document.querySelector('[data-floating-ball-panel]')).toBeNull();
 
     await trigger.click();
 
     expect(sendRuntimeMessage).toHaveBeenCalledWith({
       type: 'START_PAGE_TRANSLATION',
     });
-
-    expect(document.body.textContent).toContain('已完成 1 段翻译');
     expect(trigger.dataset.state).toBe('translated');
+    expect(document.body.textContent).not.toContain('双语');
+    expect(document.body.textContent).not.toContain('设置');
 
-    await trigger.click();
-    const translatedButton = document.querySelector(
-      '[data-floating-ball-mode="translated-only"]',
-    ) as HTMLButtonElement;
-    expect(translatedButton).not.toBeNull();
-
-    await translatedButton.click();
-
-    expect(sendRuntimeMessage).toHaveBeenCalledWith({
-      type: 'SET_DISPLAY_MODE',
-      displayMode: 'translated-only',
-    });
-    expect(document.body.textContent).toContain('当前模式：仅译文');
-
-    const settingsButton = document.querySelector(
-      '[data-floating-ball-settings]',
-    ) as HTMLButtonElement;
-    await settingsButton.click();
-    expect(openOptionsPage).toHaveBeenCalled();
-
-    controller.updateDisplayMode('original-only');
-    expect(document.body.textContent).toContain('当前模式：仅原文');
+    controller.markTranslated();
+    expect(trigger.dataset.state).toBe('translated');
   });
 
-  it('shows a readable failure state when translation request fails', async () => {
+  it('shows an error state when translation request fails', async () => {
     const sendRuntimeMessage = vi.fn().mockRejectedValue(new Error('DeepSeek 请求失败'));
 
     mountFloatingBall(document.body, {
       sendRuntimeMessage,
-      openOptionsPage: vi.fn(),
     });
 
     const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
     await trigger.click();
 
-    expect(document.body.textContent).toContain('翻译失败：DeepSeek 请求失败');
-    expect(document.body.textContent).toContain('当前模式：双语');
     expect(trigger.dataset.state).toBe('error');
+    expect(trigger.title).toContain('翻译失败：DeepSeek 请求失败');
   });
 
   it('marks partial success distinctly for follow-up retries', async () => {
@@ -84,36 +62,105 @@ describe('mountFloatingBall', () => {
 
     mountFloatingBall(document.body, {
       sendRuntimeMessage,
-      openOptionsPage: vi.fn(),
     });
 
     const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
     await trigger.click();
 
-    expect(document.body.textContent).toContain('已完成 1 段翻译，1 个批次失败');
     expect(trigger.dataset.state).toBe('partial-success');
+    expect(trigger.title).toContain('1 个批次失败');
   });
 
-  it('starts translating immediately when auto-start is enabled', async () => {
+  it('translates viewport segments first and continues when scrolling', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <article>
+        <p>Visible paragraph</p>
+        <p>Below paragraph</p>
+        <p>Far paragraph</p>
+      </article>
+    `;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const paragraphs = Array.from(document.querySelectorAll('p')) as HTMLElement[];
+    paragraphs[0].getBoundingClientRect = vi.fn(() => ({
+      top: 100,
+      bottom: 140,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 100,
+      toJSON: () => undefined,
+    }));
+    paragraphs[1].getBoundingClientRect = vi.fn(() => ({
+      top: 760,
+      bottom: 800,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 760,
+      toJSON: () => undefined,
+    }));
+    paragraphs[2].getBoundingClientRect = vi.fn(() => ({
+      top: 1800,
+      bottom: 1840,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 1800,
+      toJSON: () => undefined,
+    }));
     const sendRuntimeMessage = vi.fn().mockResolvedValue({
       type: 'PAGE_TRANSLATION_FINISHED',
       status: 'success',
-      translated: [{ id: 'seg-0', translatedText: '你好，世界' }],
+      translated: [{ id: 'seg-0', translatedText: '可见段落' }],
       failedBatches: [],
     });
 
     mountFloatingBall(document.body, {
       sendRuntimeMessage,
-      openOptionsPage: vi.fn(),
-      autoStart: true,
     });
 
-    await Promise.resolve();
-    await Promise.resolve();
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
 
-    expect(sendRuntimeMessage).toHaveBeenCalledWith({
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(1, {
       type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-0', text: 'Visible paragraph' }],
     });
-    expect(document.body.textContent).toContain('已完成 1 段翻译');
+
+    sendRuntimeMessage.mockResolvedValueOnce({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: [{ id: 'seg-1', translatedText: '下方段落' }],
+      failedBatches: [],
+    });
+    paragraphs[1].getBoundingClientRect = vi.fn(() => ({
+      top: 320,
+      bottom: 360,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 320,
+      toJSON: () => undefined,
+    }));
+
+    window.dispatchEvent(new Event('scroll'));
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-1', text: 'Below paragraph' }],
+    });
   });
 });

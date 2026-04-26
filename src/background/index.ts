@@ -1,29 +1,42 @@
 import { createMessageHandler } from './messaging';
+import { detectTranslationTarget } from './targets/detect-target';
 import { testProviderConnection } from './providers/connection';
 import { getProvider } from './providers/registry';
 import { postJson } from './providers/transport';
+import { DEFAULT_PAGE_TRANSLATION_BATCH_SIZE } from './translator/config';
 import { translatePageSegments } from './translator/translate-page';
 import { loadSettings } from '../storage/settings';
 import type {
   ApplyPageTranslationMessage,
+  ApplyTranslationResultMessage,
   CollectPageSegmentsMessage,
   StartPageTranslationMessage,
+  StartTranslationJobMessage,
   SetDisplayModeMessage,
   TestProviderConnectionMessage,
 } from '../shared/messages';
+import type {
+  TranslationTarget,
+  TranslationTargetKind,
+} from '../shared/translation-target';
 import type {
   DeepSeekProviderSettings,
   OpenAICompatibleProviderSettings,
   TraditionalProviderSettings,
 } from '../shared/types';
 
-const DEFAULT_BATCH_SIZE = 20;
+const DEBUG_PREFIX = '[Immersive AI Translate]';
 
 type SendMessageToTab = {
   (tabId: number, message: CollectPageSegmentsMessage): Promise<Array<{ id: string; text: string }>>;
   (tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
+  (tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
   (tabId: number, message: SetDisplayModeMessage): Promise<void>;
 };
+
+function logDebug(message: string, details?: Record<string, unknown>) {
+  console.log(DEBUG_PREFIX, message, details ?? {});
+}
 
 async function translatePage(
   segments: Array<{ id: string; text: string }>,
@@ -50,7 +63,7 @@ async function translatePage(
         segments,
         context,
         (request) => provider.translateSegments(request, settings, postJson),
-        DEFAULT_BATCH_SIZE,
+        DEFAULT_PAGE_TRANSLATION_BATCH_SIZE,
       );
     }
     case 'deepseek': {
@@ -65,7 +78,7 @@ async function translatePage(
         segments,
         context,
         (request) => provider.translateSegments(request, settings, postJson),
-        DEFAULT_BATCH_SIZE,
+        DEFAULT_PAGE_TRANSLATION_BATCH_SIZE,
       );
     }
     case 'traditional': {
@@ -80,7 +93,7 @@ async function translatePage(
         segments,
         context,
         (request) => provider.translateSegments(request, settings, postJson),
-        DEFAULT_BATCH_SIZE,
+        DEFAULT_PAGE_TRANSLATION_BATCH_SIZE,
       );
     }
   }
@@ -91,20 +104,51 @@ function sendMessageToTab(
   message: CollectPageSegmentsMessage,
 ): Promise<Array<{ id: string; text: string }>>;
 function sendMessageToTab(tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
+function sendMessageToTab(tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
 function sendMessageToTab(tabId: number, message: SetDisplayModeMessage): Promise<void>;
 function sendMessageToTab(
   tabId: number,
-  message: CollectPageSegmentsMessage | ApplyPageTranslationMessage | SetDisplayModeMessage,
+  message:
+    | CollectPageSegmentsMessage
+    | ApplyPageTranslationMessage
+    | ApplyTranslationResultMessage
+    | SetDisplayModeMessage,
 ) {
   return chrome.tabs.sendMessage(tabId, message) as Promise<
     Array<{ id: string; text: string }> | void
   >;
 }
 
+async function detectTarget(
+  tabId: number,
+  requestedKind?: TranslationTargetKind,
+): Promise<TranslationTarget> {
+  const tab = await chrome.tabs.get(tabId);
+  const target = await detectTranslationTarget(tab, requestedKind);
+  logDebug('detected translation target', {
+    tabId,
+    requestedKind,
+    targetKind: target.kind,
+    url: target.url,
+  });
+  return target;
+}
+
+async function openPdfWorkspace(target: TranslationTarget): Promise<number> {
+  logDebug('pdf workspace placeholder invoked', {
+    tabId: target.tabId,
+    targetKind: target.kind,
+  });
+  return target.tabId;
+}
+
 const handler = createMessageHandler({
   sendMessageToTab,
   translatePage,
   loadSettings,
+  detectTarget,
+  openPdfWorkspace,
+  debugLog: logDebug,
 });
 
 function isSetDisplayModeMessage(message: unknown): message is SetDisplayModeMessage {
@@ -125,6 +169,15 @@ function isStartPageTranslationMessage(message: unknown): message is StartPageTr
   );
 }
 
+function isStartTranslationJobMessage(message: unknown): message is StartTranslationJobMessage {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'type' in message &&
+    message.type === 'START_TRANSLATION_JOB'
+  );
+}
+
 function isTestProviderConnectionMessage(
   message: unknown,
 ): message is TestProviderConnectionMessage {
@@ -141,7 +194,23 @@ chrome.runtime.onMessage.addListener((
   sender: chrome.runtime.MessageSender,
   sendResponse: (response?: unknown) => void,
 ) => {
-  if (isStartPageTranslationMessage(message) && typeof message.tabId !== 'number') {
+  if (
+    typeof message === 'object' &&
+    message !== null &&
+    'type' in message &&
+    typeof message.type === 'string'
+  ) {
+    logDebug('runtime message received', {
+      type: message.type,
+      senderTabId: sender.tab?.id,
+      messageTabId: 'tabId' in message ? message.tabId : undefined,
+    });
+  }
+
+  if (
+    (isStartPageTranslationMessage(message) || isStartTranslationJobMessage(message)) &&
+    typeof message.tabId !== 'number'
+  ) {
     if (typeof sender.tab?.id !== 'number') {
       sendResponse({
         type: 'PAGE_TRANSLATION_FAILED',

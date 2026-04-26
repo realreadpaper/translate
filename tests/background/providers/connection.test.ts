@@ -45,6 +45,25 @@ describe('testProviderConnection', () => {
       ok: true,
       message: '连接成功',
     });
+    expect(transport).toHaveBeenCalledWith({
+      url: 'https://api.deepseek.com/v1/chat/completions',
+      headers: {
+        Authorization: 'Bearer test-key',
+      },
+      body: {
+        model: 'deepseek-v4-flash',
+        thinking: {
+          type: 'disabled',
+        },
+        messages: [
+          {
+            role: 'user',
+            content: 'Reply with OK if the connection works.',
+          },
+        ],
+        max_tokens: 8,
+      },
+    });
   });
 
   it('treats any non-empty assistant text as a successful probe response', async () => {

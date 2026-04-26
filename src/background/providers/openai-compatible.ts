@@ -1,4 +1,8 @@
 import type { ProviderAdapter } from './types';
+import {
+  parseTranslatedSegments,
+  TRANSLATION_SYSTEM_PROMPT,
+} from './parse-translated-segments';
 
 export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
   id: 'openai-compatible',
@@ -28,6 +32,10 @@ export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
           model: settings.model,
           messages: [
             {
+              role: 'system',
+              content: TRANSLATION_SYSTEM_PROMPT,
+            },
+            {
               role: 'user',
               content: JSON.stringify({
                 segments: request.segments,
@@ -42,7 +50,7 @@ export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
       };
 
       const content = response.choices?.[0]?.message?.content ?? '[]';
-      const segments = JSON.parse(content) as Array<{ id: string; translatedText: string }>;
+      const segments = parseTranslatedSegments(content);
 
       return { ok: true, segments };
     } catch (error) {

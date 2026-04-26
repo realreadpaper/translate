@@ -27,6 +27,42 @@ describe('settings storage', () => {
     expect(store.get('immersive-ai-translate.settings')).toEqual(defaults);
   });
 
+  it('migrates the legacy deepseek default model to the current default', async () => {
+    const legacySettings = {
+      ...createDefaultSettings(),
+      providers: {
+        ...createDefaultSettings().providers,
+        deepseek: {
+          ...createDefaultSettings().providers.deepseek,
+          model: 'deepseek-chat',
+        },
+      },
+    };
+
+    store.set('immersive-ai-translate.settings', legacySettings);
+
+    await expect(loadSettings()).resolves.toEqual({
+      ...legacySettings,
+      providers: {
+        ...legacySettings.providers,
+        deepseek: {
+          ...legacySettings.providers.deepseek,
+          model: 'deepseek-v4-flash',
+        },
+      },
+    });
+    expect(store.get('immersive-ai-translate.settings')).toEqual({
+      ...legacySettings,
+      providers: {
+        ...legacySettings.providers,
+        deepseek: {
+          ...legacySettings.providers.deepseek,
+          model: 'deepseek-v4-flash',
+        },
+      },
+    });
+  });
+
   it('persists and reloads settings', async () => {
     const settings = {
       ...createDefaultSettings(),

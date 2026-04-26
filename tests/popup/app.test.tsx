@@ -40,7 +40,7 @@ describe('Popup App', () => {
     expect(screen.getByText('DeepSeek')).toBeTruthy();
     expect(screen.getByRole('checkbox', { name: '打开页面自动翻译' })).toBeTruthy();
 
-    const translateButton = screen.getByRole('button', { name: '立即翻译当前页面' });
+    const translateButton = screen.getByRole('button', { name: '手动执行本页翻译' });
     fireEvent.click(translateButton);
     expect((translateButton as HTMLButtonElement).disabled).toBe(true);
 
@@ -128,7 +128,7 @@ describe('Popup App', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '立即翻译当前页面' }));
+    fireEvent.click(screen.getByRole('button', { name: '手动执行本页翻译' }));
 
     await waitFor(() => {
       expect(screen.getByText('翻译失败：DeepSeek 请求失败')).toBeTruthy();
@@ -153,7 +153,7 @@ describe('Popup App', () => {
 
     await waitFor(() => {
       expect(updateAutoTranslateOnLoad).toHaveBeenCalledWith(true);
-      expect(screen.getByText('已开启：进入页面后自动翻译')).toBeTruthy();
+      expect(screen.getByText('自动翻译已开启：进入页面后自动执行翻译')).toBeTruthy();
     });
   });
 });

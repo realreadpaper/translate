@@ -1,192 +1,198 @@
 import type {
   PageTranslationFailedMessage,
   PageTranslationFinishedMessage,
-  SetDisplayModeMessage,
   StartPageTranslationMessage,
 } from '../shared/messages';
-import type { DisplayMode } from '../shared/types';
+import { extractSegments } from './dom-extractor';
 
-type RuntimeMessage = StartPageTranslationMessage | SetDisplayModeMessage;
+type RuntimeMessage = StartPageTranslationMessage;
 type TranslationResponse = PageTranslationFinishedMessage | PageTranslationFailedMessage;
+type SourceSegment = { id: string; text: string };
 
 type FloatingBallDependencies = {
   sendRuntimeMessage: (message: RuntimeMessage) => Promise<void | TranslationResponse>;
-  openOptionsPage: () => Promise<void> | void;
-  autoStart?: boolean;
 };
 
 type FloatingBallController = {
-  updateDisplayMode: (mode: DisplayMode) => void;
-  markTranslated: (mode: DisplayMode) => void;
+  markTranslated: () => void;
   startTranslation: () => Promise<void>;
 };
 
 const FLOATING_BALL_STYLE_ID = 'immersive-ai-translate-floating-ball-style';
+const DEBUG_PREFIX = '[Immersive AI Translate]';
+const VIEWPORT_PRELOAD_PX = 120;
+const VIEWPORT_SEGMENT_LIMIT = 6;
+const SCROLL_DEBOUNCE_MS = 120;
 
-const MODE_LABELS: Record<DisplayMode, string> = {
-  bilingual: '双语',
-  'original-only': '仅原文',
-  'translated-only': '仅译文',
-};
+function logDebug(message: string, details?: Record<string, unknown>) {
+  console.log(DEBUG_PREFIX, message, details ?? {});
+}
 
 export function mountFloatingBall(
   root: HTMLElement,
-  { sendRuntimeMessage, openOptionsPage, autoStart = false }: FloatingBallDependencies,
+  { sendRuntimeMessage }: FloatingBallDependencies,
 ): FloatingBallController {
   ensureFloatingBallStyles();
 
   const host = document.createElement('div');
   host.dataset.floatingBall = 'true';
   host.dataset.immersiveIgnore = 'true';
-
   host.innerHTML = `
     <div class="floating-ball">
       <button aria-label="翻译当前页面" class="floating-ball__trigger" data-floating-ball-trigger type="button">译</button>
-      <section class="floating-ball__panel" data-floating-ball-panel hidden>
-        <p class="floating-ball__status" data-floating-ball-status>等待开始翻译</p>
-        <p class="floating-ball__mode" data-floating-ball-mode-line>当前模式：双语</p>
-        <div class="floating-ball__modes">
-          <button data-floating-ball-mode="bilingual" type="button">双语</button>
-          <button data-floating-ball-mode="original-only" type="button">原文</button>
-          <button data-floating-ball-mode="translated-only" type="button">译文</button>
-        </div>
-        <div class="floating-ball__actions">
-          <button data-floating-ball-retry type="button">重新翻译</button>
-          <button data-floating-ball-settings type="button">设置</button>
-        </div>
-      </section>
     </div>
   `;
 
   root.appendChild(host);
 
   const trigger = host.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
-  const panel = host.querySelector('[data-floating-ball-panel]') as HTMLElement;
-  const status = host.querySelector('[data-floating-ball-status]') as HTMLElement;
-  const modeLine = host.querySelector('[data-floating-ball-mode-line]') as HTMLElement;
-  const retryButton = host.querySelector('[data-floating-ball-retry]') as HTMLButtonElement;
-  const settingsButton = host.querySelector('[data-floating-ball-settings]') as HTMLButtonElement;
-  const modeButtons = Array.from(
-    host.querySelectorAll('[data-floating-ball-mode]'),
-  ) as HTMLButtonElement[];
-
   let translated = false;
-  let isOpen = false;
   let isTranslating = false;
-  let currentMode: DisplayMode = 'bilingual';
-  let triggerState: 'idle' | 'loading' | 'translated' | 'partial-success' | 'error' = 'idle';
+  let viewportModeStarted = false;
+  let scrollTimer: number | undefined;
+  const completedSegmentIds = new Set<string>();
+  const pendingSegmentIds = new Set<string>();
 
   function setTriggerState(
     nextState: 'idle' | 'loading' | 'translated' | 'partial-success' | 'error',
+    title?: string,
   ) {
-    triggerState = nextState;
     trigger.dataset.state = nextState;
-  }
-
-  function renderMode(mode: DisplayMode) {
-    currentMode = mode;
-    modeLine.textContent = `当前模式：${MODE_LABELS[mode]}`;
-    modeButtons.forEach((button) => {
-      const isActive = button.dataset.floatingBallMode === mode;
-      button.dataset.active = String(isActive);
-    });
-  }
-
-  function setPanelOpen(nextOpen: boolean) {
-    isOpen = nextOpen;
-    panel.hidden = !nextOpen;
-  }
-
-  async function startTranslation(force = false) {
-    if (isTranslating || (translated && !force)) {
+    if (title) {
+      trigger.title = title;
+      trigger.setAttribute('aria-label', title);
       return;
     }
 
+    const fallbackTitle = nextState === 'translated' ? '当前页面已翻译' : '翻译当前页面';
+    trigger.title = fallbackTitle;
+    trigger.setAttribute('aria-label', fallbackTitle);
+  }
+
+  function collectNextViewportSegments(): SourceSegment[] {
+    const segments = extractSegments(root);
+    const nextSegments = segments.filter((segment) => {
+      if (completedSegmentIds.has(segment.id) || pendingSegmentIds.has(segment.id)) {
+        return false;
+      }
+
+      const element = root.querySelector(`[data-segment-id="${segment.id}"]`);
+      if (!element) {
+        return false;
+      }
+
+      const rect = element.getBoundingClientRect();
+      return rect.bottom >= 0 && rect.top <= window.innerHeight + VIEWPORT_PRELOAD_PX;
+    });
+
+    return nextSegments.slice(0, VIEWPORT_SEGMENT_LIMIT);
+  }
+
+  async function startTranslation(segments = collectNextViewportSegments()) {
+    if (!host.isConnected) {
+      return;
+    }
+
+    if (isTranslating) {
+      logDebug('floating ball ignored duplicate translation click');
+      return;
+    }
+
+    const message: StartPageTranslationMessage =
+      segments.length > 0
+        ? {
+            type: 'START_PAGE_TRANSLATION',
+            segments,
+          }
+        : {
+            type: 'START_PAGE_TRANSLATION',
+          };
+
+    segments.forEach((segment) => pendingSegmentIds.add(segment.id));
+    logDebug('floating ball starting html-page translation', {
+      segmentCount: segments.length,
+    });
     isTranslating = true;
     trigger.disabled = true;
-    setTriggerState('loading');
-    status.textContent = '正在翻译当前页面...';
+    setTriggerState('loading', '正在翻译当前页面...');
 
     try {
-      const response = (await sendRuntimeMessage({
-        type: 'START_PAGE_TRANSLATION',
-      })) as TranslationResponse;
+      const response = (await sendRuntimeMessage(message)) as TranslationResponse;
+      logDebug('floating ball received translation response', {
+        responseType: response.type,
+        status: response.type === 'PAGE_TRANSLATION_FINISHED' ? response.status : undefined,
+      });
 
       if (response.type === 'PAGE_TRANSLATION_FAILED') {
         throw new Error(response.message);
       }
 
       translated = true;
-      setPanelOpen(true);
-      renderMode('bilingual');
+      response.translated.forEach((segment) => {
+        completedSegmentIds.add(segment.id);
+        pendingSegmentIds.delete(segment.id);
+      });
+      response.failedBatches.forEach((batch) => {
+        batch.segmentIds.forEach((id) => pendingSegmentIds.delete(id));
+      });
 
       if (response.status === 'partial-success') {
-        setTriggerState('partial-success');
-        status.textContent = `已完成 ${response.translated.length} 段翻译，${response.failedBatches.length} 个批次失败`;
+        setTriggerState(
+          'partial-success',
+          `已完成 ${response.translated.length} 段翻译，${response.failedBatches.length} 个批次失败`,
+        );
       } else {
-        setTriggerState('translated');
-        status.textContent = `已完成 ${response.translated.length} 段翻译`;
+        setTriggerState('translated', `已完成 ${response.translated.length} 段翻译`);
       }
     } catch (error) {
-      setPanelOpen(true);
-      setTriggerState('error');
-      status.textContent = `翻译失败：${error instanceof Error ? error.message : String(error)}`;
-      renderMode('bilingual');
+      translated = false;
+      segments.forEach((segment) => pendingSegmentIds.delete(segment.id));
+      logDebug('floating ball translation failed', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      setTriggerState(
+        'error',
+        `翻译失败：${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       isTranslating = false;
       trigger.disabled = false;
     }
   }
 
-  trigger.addEventListener('click', () => {
-    if (!translated) {
-      void startTranslation();
+  function scheduleViewportTranslation() {
+    if (!viewportModeStarted || !host.isConnected) {
       return;
     }
 
-    setPanelOpen(!isOpen);
-  });
+    if (scrollTimer !== undefined) {
+      window.clearTimeout(scrollTimer);
+    }
 
-  modeButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const mode = button.dataset.floatingBallMode as DisplayMode;
-      void sendRuntimeMessage({
-        type: 'SET_DISPLAY_MODE',
-        displayMode: mode,
-      });
-      renderMode(mode);
-    });
-  });
-
-  retryButton.addEventListener('click', () => {
-    void startTranslation(true);
-  });
-
-  settingsButton.addEventListener('click', () => {
-    void openOptionsPage();
-  });
-
-  setTriggerState('idle');
-  renderMode('bilingual');
-
-  if (autoStart) {
-    queueMicrotask(() => {
-      if (!translated && !isTranslating) {
-        void startTranslation();
+    scrollTimer = window.setTimeout(() => {
+      const segments = collectNextViewportSegments();
+      if (segments.length === 0) {
+        return;
       }
-    });
+
+      void startTranslation(segments);
+    }, SCROLL_DEBOUNCE_MS);
   }
 
+  trigger.addEventListener('click', () => {
+    viewportModeStarted = true;
+    void startTranslation();
+  });
+  window.addEventListener('scroll', scheduleViewportTranslation, { passive: true });
+
+  setTriggerState('idle');
+
   return {
-    startTranslation,
-    updateDisplayMode(mode) {
-      renderMode(mode);
-    },
-    markTranslated(mode) {
+    markTranslated() {
       translated = true;
-      setTriggerState('translated');
-      renderMode(mode);
+      setTriggerState('translated', translated ? '当前页面已翻译' : '翻译当前页面');
     },
+    startTranslation,
   };
 }
 
@@ -208,9 +214,7 @@ function ensureFloatingBallStyles() {
 
     .floating-ball {
       display: flex;
-      flex-direction: column;
       align-items: flex-end;
-      gap: 12px;
     }
 
     .floating-ball__trigger {
@@ -254,60 +258,6 @@ function ensureFloatingBallStyles() {
 
     .floating-ball__trigger[data-state="loading"] {
       background: linear-gradient(135deg, #475569 0%, #334155 100%);
-    }
-
-    .floating-ball__panel {
-      width: min(280px, calc(100vw - 32px));
-      padding: 14px;
-      border-radius: 18px;
-      border: 1px solid rgba(143, 124, 92, 0.18);
-      background: rgba(255, 252, 245, 0.96);
-      box-shadow: 0 18px 40px rgba(66, 54, 35, 0.16);
-      color: #1f2937;
-    }
-
-    .floating-ball__status,
-    .floating-ball__mode {
-      margin: 0;
-      line-height: 1.5;
-    }
-
-    .floating-ball__status {
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    .floating-ball__mode {
-      margin-top: 6px;
-      color: #5a6471;
-      font-size: 12px;
-    }
-
-    .floating-ball__modes,
-    .floating-ball__actions {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 12px;
-    }
-
-    .floating-ball__actions {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .floating-ball__panel button {
-      border: 0;
-      border-radius: 12px;
-      padding: 10px 12px;
-      background: #efe6d6;
-      color: #1f2937;
-      font: inherit;
-      cursor: pointer;
-    }
-
-    .floating-ball__panel button[data-active="true"] {
-      background: #1f2937;
-      color: #fff;
     }
   `;
 

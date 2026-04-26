@@ -114,4 +114,40 @@ describe('translatePageSegments', () => {
       failedBatches: [{ segmentIds: ['seg-2'], message: 'network down' }],
     });
   });
+
+  it('records malformed successful batch payloads instead of throwing spread errors', async () => {
+    const result = await translatePageSegments(
+      [
+        { id: 'seg-0', text: 'first' },
+        { id: 'seg-1', text: 'second' },
+      ],
+      {
+        providerId: 'deepseek',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
+        providerSettings: {
+          apiKey: 'test-key',
+          baseUrl: 'https://api.deepseek.com/v1',
+          model: 'deepseek-v4-flash',
+        },
+      },
+      async () =>
+        ({
+          ok: true,
+          segments: { id: 'seg-0', translatedText: 'first-zh' },
+        }) as never,
+      2,
+    );
+
+    expect(result).toEqual({
+      status: 'partial-success',
+      translated: [],
+      failedBatches: [
+        {
+          segmentIds: ['seg-0', 'seg-1'],
+          message: 'Provider returned malformed translated segments.',
+        },
+      ],
+    });
+  });
 });

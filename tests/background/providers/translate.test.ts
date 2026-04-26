@@ -61,6 +61,37 @@ describe('openAiCompatibleProvider.translateSegments', () => {
       message: 'Request was rate limited by openai-compatible',
     });
   });
+
+  it('accepts model responses wrapped in markdown json fences and a segments object', async () => {
+    const transport = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: '```json\n{"segments":[{"id":"seg-1","translatedText":"你好，世界"}]}\n```',
+          },
+        },
+      ],
+    });
+
+    const result = await openAiCompatibleProvider.translateSegments(
+      {
+        segments: [{ id: 'seg-1', text: 'Hello, world' }],
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
+      },
+      {
+        apiKey: 'test-key',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o-mini',
+      },
+      transport,
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      segments: [{ id: 'seg-1', translatedText: '你好，世界' }],
+    });
+  });
 });
 
 describe('traditionalProvider.translateSegments', () => {
@@ -124,7 +155,15 @@ describe('deepseekProvider.translateSegments', () => {
       },
       body: {
         model: 'deepseek-v4-flash',
+        thinking: {
+          type: 'disabled',
+        },
         messages: [
+          {
+            role: 'system',
+            content:
+              'Translate each segment. Return only a JSON array of objects with id and translatedText. Do not wrap the JSON in markdown.',
+          },
           {
             role: 'user',
             content: JSON.stringify({

@@ -101,7 +101,7 @@ export function App({
       await updateAutoTranslateOnLoad(nextValue);
       setAutoTranslateEnabled(nextValue);
       setStatusMessage(
-        nextValue ? '已开启：进入页面后自动翻译' : '已关闭：改为点击悬浮球手动翻译',
+        nextValue ? '自动翻译已开启：进入页面后自动执行翻译' : '自动翻译已关闭：改为手动执行',
       );
     } catch (error) {
       setStatusMessage(
@@ -125,7 +125,7 @@ export function App({
 
         <section className="popup-status-card">
           <div className="popup-section-header">
-            <span>自动翻译</span>
+            <span>执行策略</span>
             <strong>{autoTranslateEnabled ? '已开启' : '已关闭'}</strong>
           </div>
           <label className="popup-toggle-row">
@@ -138,8 +138,8 @@ export function App({
             />
             <span>
               {autoTranslateEnabled
-                ? '进入页面后自动翻译'
-                : '关闭后通过悬浮球或下方按钮手动翻译'}
+                ? '进入页面后自动执行翻译'
+                : '关闭后通过悬浮球或下方按钮手动执行'}
             </span>
           </label>
         </section>
@@ -150,7 +150,7 @@ export function App({
           disabled={translating}
           onClick={() => void handleTranslate()}
         >
-          {translating ? '正在翻译...' : '立即翻译当前页面'}
+          {translating ? '执行中...' : '手动执行本页翻译'}
         </button>
 
         <section className="popup-section">
@@ -186,10 +186,10 @@ export function App({
 
         <section className="popup-status-card">
           <div className="popup-section-header">
-            <span>状态</span>
+            <span>执行状态</span>
             <strong>{targetLanguageLabel}</strong>
           </div>
-          <p className="popup-status-message">{statusMessage || '等待开始翻译'}</p>
+          <p className="popup-status-message">{statusMessage || '等待执行翻译'}</p>
           <p className="popup-status-meta">{`当前目标语言：${targetLanguageLabel}`}</p>
         </section>
 

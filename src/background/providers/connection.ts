@@ -31,6 +31,9 @@ export async function testProviderConnection<T extends ProviderId>(
       },
       body: {
         model: connectionSettings.model,
+        thinking: {
+          type: 'disabled',
+        },
         messages: [
           {
             role: 'user',

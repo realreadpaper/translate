@@ -53,6 +53,14 @@ export async function translatePageSegments(
     }
 
     if (result.ok) {
+      if (!Array.isArray(result.segments)) {
+        failedBatches.push({
+          segmentIds: batch.map((segment) => segment.id),
+          message: 'Provider returned malformed translated segments.',
+        });
+        continue;
+      }
+
       translated.push(...result.segments);
       continue;
     }

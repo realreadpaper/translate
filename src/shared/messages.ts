@@ -1,8 +1,16 @@
 import type { DisplayMode } from './types';
+import type { TranslationTarget, TranslationTargetKind } from './translation-target';
 
 export type StartPageTranslationMessage = {
   type: 'START_PAGE_TRANSLATION';
   tabId?: number;
+  segments?: Array<{ id: string; text: string }>;
+};
+
+export type StartTranslationJobMessage = {
+  type: 'START_TRANSLATION_JOB';
+  tabId?: number;
+  targetKind?: TranslationTargetKind;
 };
 
 export type SetDisplayModeMessage = {
@@ -21,11 +29,30 @@ export type ApplyPageTranslationMessage = {
   displayMode: DisplayMode;
 };
 
+export type ApplyTranslationResultMessage = {
+  type: 'APPLY_TRANSLATION_RESULT';
+  target: TranslationTarget;
+  translated: Array<{ id: string; translatedText: string }>;
+  displayMode: DisplayMode;
+};
+
 export type PageTranslationFinishedMessage = {
   type: 'PAGE_TRANSLATION_FINISHED';
+  target?: TranslationTarget;
   status: 'success' | 'partial-success';
   translated: Array<{ id: string; translatedText: string }>;
   failedBatches: Array<{ segmentIds: string[]; message: string }>;
+};
+
+export type TranslationJobStartedMessage = {
+  type: 'TRANSLATION_JOB_STARTED';
+  target: TranslationTarget;
+};
+
+export type TranslationJobRedirectedMessage = {
+  type: 'TRANSLATION_JOB_REDIRECTED';
+  target: TranslationTarget;
+  workspaceTabId: number;
 };
 
 export type PageTranslationFailedMessage = {
