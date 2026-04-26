@@ -3,7 +3,7 @@ import type {
   PageTranslationFinishedMessage,
   StartPageTranslationMessage,
 } from '../shared/messages';
-import { extractSegments } from './dom-extractor';
+import { extractSegments, TRANSLATABLE_BLOCK_SELECTOR } from './dom-extractor';
 
 type RuntimeMessage = StartPageTranslationMessage;
 type TranslationResponse = PageTranslationFinishedMessage | PageTranslationFailedMessage;
@@ -23,6 +23,8 @@ const DEBUG_PREFIX = '[Immersive AI Translate]';
 const VIEWPORT_PRELOAD_PX = 120;
 const VIEWPORT_SEGMENT_LIMIT = 6;
 const SCROLL_DEBOUNCE_MS = 120;
+const IGNORED_MUTATION_SELECTOR =
+  '[data-floating-ball="true"], [data-translation-for], [data-immersive-ignore="true"]';
 
 function logDebug(message: string, details?: Record<string, unknown>) {
   console.log(DEBUG_PREFIX, message, details ?? {});
@@ -50,8 +52,10 @@ export function mountFloatingBall(
   let isTranslating = false;
   let viewportModeStarted = false;
   let scrollTimer: number | undefined;
-  const completedSegmentIds = new Set<string>();
-  const pendingSegmentIds = new Set<string>();
+  let mutationTimer: number | undefined;
+  let needsViewportRescanAfterCurrent = false;
+  const completedSegmentFingerprints = new Map<string, string>();
+  const pendingSegmentFingerprints = new Map<string, string>();
 
   function setTriggerState(
     nextState: 'idle' | 'loading' | 'translated' | 'partial-success' | 'error',
@@ -72,7 +76,11 @@ export function mountFloatingBall(
   function collectNextViewportSegments(): SourceSegment[] {
     const segments = extractSegments(root);
     const nextSegments = segments.filter((segment) => {
-      if (completedSegmentIds.has(segment.id) || pendingSegmentIds.has(segment.id)) {
+      const fingerprint = createSegmentFingerprint(segment);
+      if (
+        completedSegmentFingerprints.get(segment.id) === fingerprint ||
+        pendingSegmentFingerprints.get(segment.id) === fingerprint
+      ) {
         return false;
       }
 
@@ -94,7 +102,14 @@ export function mountFloatingBall(
     }
 
     if (isTranslating) {
-      logDebug('floating ball ignored duplicate translation click');
+      if (segments.length > 0) {
+        needsViewportRescanAfterCurrent = true;
+        logDebug('floating ball queued viewport rescan while translation is running', {
+          segmentCount: segments.length,
+        });
+      } else {
+        logDebug('floating ball ignored duplicate translation click');
+      }
       return;
     }
 
@@ -108,7 +123,9 @@ export function mountFloatingBall(
             type: 'START_PAGE_TRANSLATION',
           };
 
-    segments.forEach((segment) => pendingSegmentIds.add(segment.id));
+    segments.forEach((segment) => {
+      pendingSegmentFingerprints.set(segment.id, createSegmentFingerprint(segment));
+    });
     logDebug('floating ball starting html-page translation', {
       segmentCount: segments.length,
     });
@@ -129,11 +146,14 @@ export function mountFloatingBall(
 
       translated = true;
       response.translated.forEach((segment) => {
-        completedSegmentIds.add(segment.id);
-        pendingSegmentIds.delete(segment.id);
+        const pendingFingerprint = pendingSegmentFingerprints.get(segment.id);
+        if (pendingFingerprint) {
+          completedSegmentFingerprints.set(segment.id, pendingFingerprint);
+        }
+        pendingSegmentFingerprints.delete(segment.id);
       });
       response.failedBatches.forEach((batch) => {
-        batch.segmentIds.forEach((id) => pendingSegmentIds.delete(id));
+        batch.segmentIds.forEach((id) => pendingSegmentFingerprints.delete(id));
       });
 
       if (response.status === 'partial-success') {
@@ -146,7 +166,7 @@ export function mountFloatingBall(
       }
     } catch (error) {
       translated = false;
-      segments.forEach((segment) => pendingSegmentIds.delete(segment.id));
+      segments.forEach((segment) => pendingSegmentFingerprints.delete(segment.id));
       logDebug('floating ball translation failed', {
         message: error instanceof Error ? error.message : String(error),
       });
@@ -157,6 +177,11 @@ export function mountFloatingBall(
     } finally {
       isTranslating = false;
       trigger.disabled = false;
+      if (needsViewportRescanAfterCurrent && viewportModeStarted && host.isConnected) {
+        needsViewportRescanAfterCurrent = false;
+        logDebug('floating ball retrying queued viewport scan');
+        scheduleViewportTranslation();
+      }
     }
   }
 
@@ -179,11 +204,53 @@ export function mountFloatingBall(
     }, SCROLL_DEBOUNCE_MS);
   }
 
+  function scheduleMutationViewportTranslation() {
+    if (!viewportModeStarted || !host.isConnected) {
+      return;
+    }
+
+    if (mutationTimer !== undefined) {
+      window.clearTimeout(mutationTimer);
+    }
+
+    mutationTimer = window.setTimeout(() => {
+      const segments = collectNextViewportSegments();
+      if (segments.length === 0) {
+        return;
+      }
+
+      logDebug('floating ball scanned mutated content', {
+        segmentCount: segments.length,
+      });
+      void startTranslation(segments);
+    }, SCROLL_DEBOUNCE_MS);
+  }
+
+  const contentObserver = new MutationObserver((mutations) => {
+    if (!viewportModeStarted || !host.isConnected) {
+      return;
+    }
+
+    if (!hasMeaningfulContentMutation(mutations)) {
+      return;
+    }
+
+    logDebug('floating ball detected page content mutation', {
+      mutationCount: mutations.length,
+    });
+    scheduleMutationViewportTranslation();
+  });
+
   trigger.addEventListener('click', () => {
     viewportModeStarted = true;
     void startTranslation();
   });
   window.addEventListener('scroll', scheduleViewportTranslation, { passive: true });
+  contentObserver.observe(root, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
 
   setTriggerState('idle');
 
@@ -194,6 +261,59 @@ export function mountFloatingBall(
     },
     startTranslation,
   };
+}
+
+function createSegmentFingerprint(segment: SourceSegment): string {
+  return segment.text;
+}
+
+function hasMeaningfulContentMutation(mutations: MutationRecord[]): boolean {
+  return mutations.some((mutation) => {
+    if (isIgnoredMutationNode(mutation.target)) {
+      return false;
+    }
+
+    if (mutation.type === 'characterData') {
+      return isTranslatableMutationNode(mutation.target);
+    }
+
+    if (mutation.type !== 'childList') {
+      return false;
+    }
+
+    return Array.from(mutation.addedNodes).some((node) => isTranslatableMutationNode(node));
+  });
+}
+
+function isIgnoredMutationNode(node: Node): boolean {
+  const element =
+    node.nodeType === Node.ELEMENT_NODE
+      ? (node as Element)
+      : node.parentNode?.nodeType === Node.ELEMENT_NODE
+        ? (node.parentNode as Element)
+        : null;
+  return Boolean(element?.closest(IGNORED_MUTATION_SELECTOR));
+}
+
+function isTranslatableMutationNode(node: Node): boolean {
+  if (isIgnoredMutationNode(node)) {
+    return false;
+  }
+
+  const element =
+    node.nodeType === Node.ELEMENT_NODE
+      ? (node as Element)
+      : node.parentNode?.nodeType === Node.ELEMENT_NODE
+        ? (node.parentNode as Element)
+        : null;
+  if (!element) {
+    return false;
+  }
+
+  return Boolean(
+    element.closest(TRANSLATABLE_BLOCK_SELECTOR) ||
+      element.querySelector(TRANSLATABLE_BLOCK_SELECTOR),
+  );
 }
 
 function ensureFloatingBallStyles() {

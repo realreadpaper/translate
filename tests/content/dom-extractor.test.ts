@@ -91,6 +91,32 @@ describe('extractSegments', () => {
     expect(tweetText.dataset.segmentId).toBe('seg-0');
   });
 
+  it('keeps existing segment ids stable when dynamic content is inserted before them', () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-testid="tweetText">First visible tweet</div>
+        <div data-testid="tweetText">Second visible tweet</div>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'First visible tweet' },
+      { id: 'seg-1', text: 'Second visible tweet' },
+    ]);
+
+    const firstTweet = document.querySelector('[data-testid="tweetText"]') as HTMLElement;
+    const insertedTweet = document.createElement('div');
+    insertedTweet.dataset.testid = 'tweetText';
+    insertedTweet.textContent = 'New tweet inserted above';
+    firstTweet.before(insertedTweet);
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-2', text: 'New tweet inserted above' },
+      { id: 'seg-0', text: 'First visible tweet' },
+      { id: 'seg-1', text: 'Second visible tweet' },
+    ]);
+  });
+
   it('extracts Reddit post and comment body containers without actions', () => {
     document.body.innerHTML = `
       <main>

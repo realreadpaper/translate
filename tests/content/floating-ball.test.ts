@@ -163,4 +163,220 @@ describe('mountFloatingBall', () => {
       segments: [{ id: 'seg-1', text: 'Below paragraph' }],
     });
   });
+
+  it('retranslates an already translated visible segment when its text expands', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <article>
+        <div data-testid="tweetText">Short post</div>
+      </article>
+    `;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const tweetText = document.querySelector('[data-testid="tweetText"]') as HTMLElement;
+    tweetText.getBoundingClientRect = vi.fn(() => ({
+      top: 100,
+      bottom: 140,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 100,
+      toJSON: () => undefined,
+    }));
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-0', translatedText: '短帖' }],
+        failedBatches: [],
+      })
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-0', translatedText: '展开后的长帖' }],
+        failedBatches: [],
+      });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    tweetText.textContent = 'Short post with expanded content after clicking Show more';
+    window.dispatchEvent(new Event('scroll'));
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(1, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-0', text: 'Short post' }],
+    });
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [
+        { id: 'seg-0', text: 'Short post with expanded content after clicking Show more' },
+      ],
+    });
+  });
+
+  it('translates visible tweet text inserted after scrolling on dynamic timelines', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<main></main>';
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [],
+        failedBatches: [],
+      })
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-0', translatedText: '动态帖子' }],
+        failedBatches: [],
+      });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    const tweetText = document.createElement('div');
+    tweetText.dataset.testid = 'tweetText';
+    tweetText.textContent = 'Dynamically inserted tweet';
+    tweetText.getBoundingClientRect = vi.fn(() => ({
+      top: 120,
+      bottom: 160,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 120,
+      toJSON: () => undefined,
+    }));
+    document.querySelector('main')?.append(tweetText);
+
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-0', text: 'Dynamically inserted tweet' }],
+    });
+  });
+
+  it('ignores unrelated dynamic mutations without logging empty scans', async () => {
+    vi.useFakeTimers();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    document.body.innerHTML = '<main></main>';
+    const sendRuntimeMessage = vi.fn().mockResolvedValue({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: [],
+      failedBatches: [],
+    });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    const unrelatedNode = document.createElement('div');
+    unrelatedNode.textContent = 'Reply count updated';
+    document.querySelector('main')?.append(unrelatedNode);
+
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    const debugMessages = consoleSpy.mock.calls.map((call) => call[1]);
+    expect(debugMessages).not.toContain('floating ball detected page content mutation');
+    expect(debugMessages).not.toContain('floating ball scanned mutated content');
+    expect(sendRuntimeMessage).toHaveBeenCalledTimes(1);
+
+    consoleSpy.mockRestore();
+  });
+
+  it('retries dynamic timeline scanning after the current translation finishes', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<main></main>';
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    let finishFirstTranslation!: (value: {
+      type: 'PAGE_TRANSLATION_FINISHED';
+      status: 'success';
+      translated: [];
+      failedBatches: [];
+    }) => void;
+    const firstTranslation = new Promise((resolve) => {
+      finishFirstTranslation = resolve as typeof finishFirstTranslation;
+    });
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockReturnValueOnce(firstTranslation)
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-0', translatedText: '翻译中的动态帖子' }],
+        failedBatches: [],
+      });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    void trigger.click();
+
+    const tweetText = document.createElement('div');
+    tweetText.dataset.testid = 'tweetText';
+    tweetText.textContent = 'Tweet inserted while translating';
+    tweetText.getBoundingClientRect = vi.fn(() => ({
+      top: 120,
+      bottom: 160,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 120,
+      toJSON: () => undefined,
+    }));
+    document.querySelector('main')?.append(tweetText);
+
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+    expect(sendRuntimeMessage).toHaveBeenCalledTimes(1);
+
+    finishFirstTranslation({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: [],
+      failedBatches: [],
+    });
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-0', text: 'Tweet inserted while translating' }],
+    });
+  });
 });
