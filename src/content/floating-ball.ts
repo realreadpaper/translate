@@ -3,7 +3,8 @@ import type {
   PageTranslationFinishedMessage,
   StartPageTranslationMessage,
 } from '../shared/messages';
-import { extractSegments, TRANSLATABLE_BLOCK_SELECTOR } from './dom-extractor';
+import { logDebug } from '../shared/debug';
+import { containsTranslatableText, extractSegments } from './dom-extractor';
 
 type RuntimeMessage = StartPageTranslationMessage;
 type TranslationResponse = PageTranslationFinishedMessage | PageTranslationFailedMessage;
@@ -19,16 +20,11 @@ type FloatingBallController = {
 };
 
 const FLOATING_BALL_STYLE_ID = 'immersive-ai-translate-floating-ball-style';
-const DEBUG_PREFIX = '[Immersive AI Translate]';
 const VIEWPORT_PRELOAD_PX = 120;
 const VIEWPORT_SEGMENT_LIMIT = 6;
 const SCROLL_DEBOUNCE_MS = 120;
 const IGNORED_MUTATION_SELECTOR =
   '[data-floating-ball="true"], [data-translation-for], [data-immersive-ignore="true"]';
-
-function logDebug(message: string, details?: Record<string, unknown>) {
-  console.log(DEBUG_PREFIX, message, details ?? {});
-}
 
 export function mountFloatingBall(
   root: HTMLElement,
@@ -231,7 +227,7 @@ export function mountFloatingBall(
       return;
     }
 
-    if (!hasMeaningfulContentMutation(mutations)) {
+    if (!hasMeaningfulContentMutation(mutations, root)) {
       return;
     }
 
@@ -267,21 +263,21 @@ function createSegmentFingerprint(segment: SourceSegment): string {
   return segment.text;
 }
 
-function hasMeaningfulContentMutation(mutations: MutationRecord[]): boolean {
+function hasMeaningfulContentMutation(mutations: MutationRecord[], root: HTMLElement): boolean {
   return mutations.some((mutation) => {
     if (isIgnoredMutationNode(mutation.target)) {
       return false;
     }
 
     if (mutation.type === 'characterData') {
-      return isTranslatableMutationNode(mutation.target);
+      return isTranslatableMutationNode(mutation.target, root);
     }
 
     if (mutation.type !== 'childList') {
       return false;
     }
 
-    return Array.from(mutation.addedNodes).some((node) => isTranslatableMutationNode(node));
+    return Array.from(mutation.addedNodes).some((node) => isTranslatableMutationNode(node, root));
   });
 }
 
@@ -295,7 +291,7 @@ function isIgnoredMutationNode(node: Node): boolean {
   return Boolean(element?.closest(IGNORED_MUTATION_SELECTOR));
 }
 
-function isTranslatableMutationNode(node: Node): boolean {
+function isTranslatableMutationNode(node: Node, root: HTMLElement): boolean {
   if (isIgnoredMutationNode(node)) {
     return false;
   }
@@ -310,10 +306,7 @@ function isTranslatableMutationNode(node: Node): boolean {
     return false;
   }
 
-  return Boolean(
-    element.closest(TRANSLATABLE_BLOCK_SELECTOR) ||
-      element.querySelector(TRANSLATABLE_BLOCK_SELECTOR),
-  );
+  return containsTranslatableText(node, root);
 }
 
 function ensureFloatingBallStyles() {

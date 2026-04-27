@@ -279,16 +279,27 @@ describe('mountFloatingBall', () => {
     });
   });
 
-  it('ignores unrelated dynamic mutations without logging empty scans', async () => {
+  it('translates generic visible text inserted after viewport mode starts', async () => {
     vi.useFakeTimers();
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     document.body.innerHTML = '<main></main>';
-    const sendRuntimeMessage = vi.fn().mockResolvedValue({
-      type: 'PAGE_TRANSLATION_FINISHED',
-      status: 'success',
-      translated: [],
-      failedBatches: [],
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
     });
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [],
+        failedBatches: [],
+      })
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-0', translatedText: '动态卡片' }],
+        failedBatches: [],
+      });
 
     mountFloatingBall(document.body, {
       sendRuntimeMessage,
@@ -297,19 +308,28 @@ describe('mountFloatingBall', () => {
     const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
     await trigger.click();
 
-    const unrelatedNode = document.createElement('div');
-    unrelatedNode.textContent = 'Reply count updated';
-    document.querySelector('main')?.append(unrelatedNode);
+    const genericCard = document.createElement('div');
+    genericCard.textContent = 'Generic card inserted later';
+    genericCard.getBoundingClientRect = vi.fn(() => ({
+      top: 120,
+      bottom: 160,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 120,
+      toJSON: () => undefined,
+    }));
+    document.querySelector('main')?.append(genericCard);
 
     await Promise.resolve();
     await vi.runAllTimersAsync();
 
-    const debugMessages = consoleSpy.mock.calls.map((call) => call[1]);
-    expect(debugMessages).not.toContain('floating ball detected page content mutation');
-    expect(debugMessages).not.toContain('floating ball scanned mutated content');
-    expect(sendRuntimeMessage).toHaveBeenCalledTimes(1);
-
-    consoleSpy.mockRestore();
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-0', text: 'Generic card inserted later' }],
+    });
   });
 
   it('retries dynamic timeline scanning after the current translation finishes', async () => {

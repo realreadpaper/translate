@@ -6,6 +6,7 @@ import { postJson } from './providers/transport';
 import { DEFAULT_PAGE_TRANSLATION_BATCH_SIZE } from './translator/config';
 import { translatePageSegments } from './translator/translate-page';
 import { loadSettings } from '../storage/settings';
+import { logDebug } from '../shared/debug';
 import type {
   ApplyPageTranslationMessage,
   ApplyTranslationResultMessage,
@@ -25,18 +26,12 @@ import type {
   TraditionalProviderSettings,
 } from '../shared/types';
 
-const DEBUG_PREFIX = '[Immersive AI Translate]';
-
 type SendMessageToTab = {
   (tabId: number, message: CollectPageSegmentsMessage): Promise<Array<{ id: string; text: string }>>;
   (tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
   (tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
   (tabId: number, message: SetDisplayModeMessage): Promise<void>;
 };
-
-function logDebug(message: string, details?: Record<string, unknown>) {
-  console.log(DEBUG_PREFIX, message, details ?? {});
-}
 
 async function translatePage(
   segments: Array<{ id: string; text: string }>,

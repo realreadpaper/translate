@@ -62,4 +62,36 @@ describe('segment renderer', () => {
     expect(translatedNodes).toHaveLength(1);
     expect(translatedNodes[0]?.textContent).toBe('你好，地球');
   });
+
+  it('adds readable spacing around translated text', () => {
+    document.body.innerHTML = '<article><h3 data-segment-id="seg-0">Post title</h3></article>';
+
+    applyTranslations(document.body, [{ id: 'seg-0', translatedText: '帖子标题' }]);
+
+    const translated = document.querySelector('[data-translation-for="seg-0"]') as HTMLElement;
+    expect(translated.classList.contains('immersive-ai-translation')).toBe(true);
+    expect(translated.style.marginTop).toBe('6px');
+    expect(translated.style.marginBottom).toBe('10px');
+  });
+
+  it('keeps Reddit title translations in the title slot before media rendering', () => {
+    document.body.innerHTML = `
+      <shreddit-post>
+        <a slot="title" data-segment-id="seg-0">Draw-1 victory dance!</a>
+        <div slot="post-media-container">
+          <img src="/solitaire.png" alt="Solitaire challenge" />
+        </div>
+      </shreddit-post>
+    `;
+
+    applyTranslations(document.body, [{ id: 'seg-0', translatedText: '获胜跳个舞！' }]);
+
+    const translated = document.querySelector('[data-translation-for="seg-0"]') as HTMLElement;
+    const media = document.querySelector('[slot="post-media-container"]') as HTMLElement;
+
+    expect(translated.getAttribute('slot')).toBe('title');
+    expect(
+      translated.compareDocumentPosition(media) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

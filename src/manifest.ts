@@ -5,7 +5,7 @@ type StaticManifest = Exclude<ManifestV3Export, Promise<unknown> | ((...args: ne
 export const manifest: StaticManifest = {
   manifest_version: 3,
   name: 'Immersive AI Translate',
-  version: '0.1.0',
+  version: '0.2.0',
   action: {
     default_popup: 'src/popup/index.html',
   },

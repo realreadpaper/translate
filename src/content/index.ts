@@ -9,11 +9,12 @@ import {
 } from '../shared/messages';
 import type { ExtensionSettings } from '../shared/types';
 import { loadSettings } from '../storage/settings';
+import { logDebug } from '../shared/debug';
 import { extractSegments } from './dom-extractor';
 import { mountFloatingBall } from './floating-ball';
 import { applyTranslations, setDisplayMode } from './segment-renderer';
 
-const DEBUG_PREFIX = '[Immersive AI Translate]';
+const AUTO_TRANSLATE_SETTLE_MS = 500;
 
 type IncomingMessage =
   | CollectPageSegmentsMessage
@@ -32,10 +33,6 @@ type InitializeContentTranslationDependencies = {
     message: StartPageTranslationMessage,
   ) => Promise<void | PageTranslationFinishedMessage | PageTranslationFailedMessage>;
 };
-
-function logDebug(message: string, details?: Record<string, unknown>) {
-  console.log(DEBUG_PREFIX, message, details ?? {});
-}
 
 function isApplyPageTranslationMessage(
   message: IncomingMessage,
@@ -63,16 +60,73 @@ export async function initializeContentTranslation(
     displayMode: settings.displayMode,
     providerId: settings.providerId,
   });
+
+  if (settings.autoTranslateOnLoad) {
+    startAutoTranslationWhenReady(root, sendRuntimeMessage);
+    return createPassiveContentController();
+  }
+
   const controller = mountFloatingBall(root, {
     sendRuntimeMessage,
   });
 
-  if (settings.autoTranslateOnLoad) {
-    logDebug('auto translate on load starting');
-    await controller.startTranslation();
+  return controller;
+}
+
+function createPassiveContentController(): ContentController {
+  return {
+    markTranslated() {
+      return undefined;
+    },
+  };
+}
+
+function startAutoTranslationWhenReady(
+  root: HTMLElement,
+  sendRuntimeMessage: InitializeContentTranslationDependencies['sendRuntimeMessage'],
+) {
+  void waitForDocumentLoaded()
+    .then(() => waitForTranslatableContent(root))
+    .then(() => {
+      window.setTimeout(() => {
+        logDebug('auto translate on load starting', {
+          segmentCount: extractSegments(root).length,
+        });
+        void sendRuntimeMessage({ type: 'START_PAGE_TRANSLATION' });
+      }, AUTO_TRANSLATE_SETTLE_MS);
+    });
+}
+
+function waitForDocumentLoaded(): Promise<void> {
+  if (document.readyState === 'complete') {
+    return Promise.resolve();
   }
 
-  return controller;
+  return new Promise((resolve) => {
+    window.addEventListener('load', () => resolve(), { once: true });
+  });
+}
+
+function waitForTranslatableContent(root: HTMLElement): Promise<void> {
+  if (extractSegments(root).length > 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (extractSegments(root).length === 0) {
+        return;
+      }
+
+      observer.disconnect();
+      resolve();
+    });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  });
 }
 
 let contentController: ContentController | null = null;

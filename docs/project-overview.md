@@ -15,16 +15,16 @@ Immersive AI Translate 是一个面向 Chrome / Edge 的浏览器扩展，用于
 
 ### 网页翻译
 
-- 提取常见正文节点：`h1`、`h2`、`h3`、`p`、`li`、`blockquote`。
-- 支持 X / Twitter 帖子正文：`[data-testid="tweetText"]`。
-- 支持 Reddit 帖子和评论正文：
+- 使用 DOM TreeWalker 遍历可见文本节点，并归并到最近的可回填文本块，减少对特定网页结构的依赖。
+- 自动跳过脚本、样式、代码块、输入框、隐藏节点和扩展自身控件。
+- 保留 X / Twitter 帖子正文兜底：`[data-testid="tweetText"]`。
+- 保留 Reddit 帖子和评论正文兜底：
   - `shreddit-post [slot="title"]`
   - `shreddit-post [slot="text-body"]`
   - `shreddit-comment [slot="comment"]`
   - `[data-testid="post-title"]`
   - `[data-testid="post-content"]`
   - `[data-testid="comment"]`
-- 自动跳过脚本、样式、代码块、输入框等不适合翻译的内容。
 - 给每个待翻译节点写入稳定的 `data-segment-id`，确保译文回填到正确位置。
 
 ### 悬浮球渐进式翻译

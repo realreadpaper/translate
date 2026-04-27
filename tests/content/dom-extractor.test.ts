@@ -21,6 +21,46 @@ describe('extractSegments', () => {
     ]);
   });
 
+  it('extracts visible text from generic rendered containers without site selectors', () => {
+    document.body.innerHTML = `
+      <main>
+        <div class="article-card">
+          <span>Generic card title</span>
+          <span> with a plain span body.</span>
+        </div>
+        <section>
+          <div>
+            <span>Nested generic content.</span>
+          </div>
+        </section>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Generic card title with a plain span body.' },
+      { id: 'seg-1', text: 'Nested generic content.' },
+    ]);
+
+    const card = document.querySelector('.article-card') as HTMLElement;
+    expect(card.dataset.segmentId).toBe('seg-0');
+  });
+
+  it('skips invisible generic text while keeping visible siblings', () => {
+    document.body.innerHTML = `
+      <main>
+        <div style="display: none">Hidden by display.</div>
+        <div style="visibility: hidden">Hidden by visibility.</div>
+        <div hidden>Hidden by attribute.</div>
+        <div aria-hidden="true">Hidden for assistive tech.</div>
+        <div><span>Visible generic text.</span></div>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Visible generic text.' },
+    ]);
+  });
+
   it('excludes text from blocked descendants inside selected nodes', () => {
     document.body.innerHTML = `
       <article>
@@ -150,5 +190,73 @@ describe('extractSegments', () => {
     expect((document.querySelector('[slot="comment"]') as HTMLElement).dataset.segmentId).toBe(
       'seg-2',
     );
+  });
+
+  it('extracts Reddit post title before media instead of the outer media container', () => {
+    document.body.innerHTML = `
+      <main>
+        <article data-testid="post-container">
+          <div data-testid="post-content">
+            <h3>the cost is low, the value is high, you're going to bed.</h3>
+            <img alt="Screenshot text that should not be part of the title" src="/post.png" />
+          </div>
+        </article>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: "the cost is low, the value is high, you're going to bed." },
+    ]);
+
+    expect((document.querySelector('h3') as HTMLElement).dataset.segmentId).toBe('seg-0');
+    expect(
+      (document.querySelector('[data-testid="post-content"]') as HTMLElement).dataset.segmentId,
+    ).toBeUndefined();
+  });
+
+  it('skips Reddit recommendation and post chrome text to avoid duplicate translations', () => {
+    document.body.innerHTML = `
+      <main>
+        <shreddit-post>
+          <div slot="recommendation-context">
+            <p>Because you've visited this community before</p>
+          </div>
+          <div slot="post-meta">
+            <p>Because you've visited this community before</p>
+            <span>r/ClaudeCode</span>
+          </div>
+          <a slot="title">Useful Claude Code tip</a>
+        </shreddit-post>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Useful Claude Code tip' },
+    ]);
+  });
+
+  it('does not run generic paragraph extraction inside Reddit post containers', () => {
+    document.body.innerHTML = `
+      <main>
+        <shreddit-post>
+          <a slot="title">Precise Reddit title</a>
+          <div>
+            <p>Generic paragraph inside Reddit chrome should be ignored.</p>
+          </div>
+          <div slot="text-body">
+            <p>Precise Reddit body should be translated.</p>
+          </div>
+        </shreddit-post>
+        <article>
+          <p>Normal page paragraph should still be translated.</p>
+        </article>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Precise Reddit title' },
+      { id: 'seg-1', text: 'Precise Reddit body should be translated.' },
+      { id: 'seg-2', text: 'Normal page paragraph should still be translated.' },
+    ]);
   });
 });

@@ -24,11 +24,27 @@ export function applyTranslations(
 
     const translated = existingAdjacent ?? existingAnywhere ?? document.createElement('div');
     translated.dataset.translationFor = segment.id;
+    translated.dataset.immersiveIgnore = 'true';
+    translated.classList.add('immersive-ai-translation');
+    translated.style.marginTop = '6px';
+    translated.style.marginBottom = '10px';
+    translated.style.lineHeight = '1.5';
     translated.textContent = segment.translatedText;
+    syncRedditSlot(original, translated);
     if (translated !== existingAdjacent) {
       original.insertAdjacentElement('afterend', translated);
     }
   });
+}
+
+function syncRedditSlot(original: Element, translated: HTMLElement) {
+  const slotName = original.getAttribute('slot');
+  if (slotName && ['title', 'text-body', 'comment'].includes(slotName)) {
+    translated.setAttribute('slot', slotName);
+    return;
+  }
+
+  translated.removeAttribute('slot');
 }
 
 export function setDisplayMode(root: HTMLElement, mode: DisplayMode) {
