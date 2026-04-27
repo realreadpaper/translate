@@ -1,6 +1,7 @@
 import type { ExtensionSettings } from './types';
 
 type BuildTimeDefaults = {
+  VITE_RELEASE_BUILD?: string;
   VITE_DEFAULT_PROVIDER_ID?: string;
   VITE_DEFAULT_TARGET_LANGUAGE?: string;
   VITE_DEFAULT_DEEPSEEK_API_KEY?: string;
@@ -23,7 +24,7 @@ export function createDefaultSettings(
         model: 'gpt-4o-mini',
       },
       deepseek: {
-        apiKey: env.VITE_DEFAULT_DEEPSEEK_API_KEY || '',
+        apiKey: env.VITE_RELEASE_BUILD === 'true' ? '' : env.VITE_DEFAULT_DEEPSEEK_API_KEY || '',
         baseUrl: 'https://api.deepseek.com/v1',
         model: env.VITE_DEFAULT_DEEPSEEK_MODEL || 'deepseek-v4-flash',
       },

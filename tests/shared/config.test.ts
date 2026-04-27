@@ -61,4 +61,15 @@ describe('createDefaultSettings', () => {
       },
     });
   });
+
+  it('removes the local deepseek key from release build defaults', () => {
+    expect(
+      createDefaultSettings({
+        VITE_RELEASE_BUILD: 'true',
+        VITE_DEFAULT_PROVIDER_ID: 'deepseek',
+        VITE_DEFAULT_DEEPSEEK_API_KEY: 'local-key',
+        VITE_DEFAULT_DEEPSEEK_MODEL: 'deepseek-v4-flash',
+      }).providers.deepseek.apiKey,
+    ).toBe('');
+  });
 });
