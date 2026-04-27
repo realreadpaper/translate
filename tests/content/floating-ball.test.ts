@@ -164,6 +164,63 @@ describe('mountFloatingBall', () => {
     });
   });
 
+  it('cleans visible ads before selecting viewport segments', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <main>
+        <p>Visible article paragraph</p>
+        <aside class="ad-banner">Visible ad should be hidden first</aside>
+      </main>
+    `;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const article = document.querySelector('p') as HTMLElement;
+    const ad = document.querySelector('.ad-banner') as HTMLElement;
+    article.getBoundingClientRect = vi.fn(() => ({
+      top: 100,
+      bottom: 140,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 100,
+      toJSON: () => undefined,
+    }));
+    ad.getBoundingClientRect = vi.fn(() => ({
+      top: 160,
+      bottom: 220,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 60,
+      x: 0,
+      y: 160,
+      toJSON: () => undefined,
+    }));
+    const sendRuntimeMessage = vi.fn().mockResolvedValue({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: [{ id: 'seg-0', translatedText: '可见正文段落' }],
+      failedBatches: [],
+    });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    expect(ad.dataset.immersiveAdHidden).toBe('true');
+    expect(sendRuntimeMessage).toHaveBeenCalledWith({
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-0', text: 'Visible article paragraph' }],
+    });
+  });
+
   it('retranslates an already translated visible segment when its text expands', async () => {
     vi.useFakeTimers();
     document.body.innerHTML = `

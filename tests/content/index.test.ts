@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { initializeContentTranslation } from '../../src/content/index';
+import { collectPageSegments, initializeContentTranslation } from '../../src/content/index';
 import { createDefaultSettings } from '../../src/shared/config';
 
 describe('initializeContentTranslation', () => {
@@ -101,5 +101,42 @@ describe('initializeContentTranslation', () => {
 
     expect(document.querySelector('[data-floating-ball-trigger]')).not.toBeNull();
     expect(sendRuntimeMessage).not.toHaveBeenCalled();
+  });
+
+  it('hides ads during initialization before translation controls are used', async () => {
+    document.body.innerHTML = `
+      <main>
+        <p>Readable page text.</p>
+        <aside class="ad-banner">Noisy ad copy.</aside>
+      </main>
+    `;
+    const loadSettings = vi.fn().mockResolvedValue({
+      ...createDefaultSettings(),
+      autoTranslateOnLoad: false,
+    });
+    const sendRuntimeMessage = vi.fn().mockResolvedValue(undefined);
+
+    await initializeContentTranslation(document.body, {
+      loadSettings,
+      sendRuntimeMessage,
+    });
+
+    const ad = document.querySelector('.ad-banner') as HTMLElement;
+    expect(ad.dataset.immersiveAdHidden).toBe('true');
+    expect(ad.dataset.immersiveIgnore).toBe('true');
+    expect(ad.style.display).toBe('none');
+  });
+
+  it('cleans ads before collecting page segments for full-page translation', () => {
+    document.body.innerHTML = `
+      <main>
+        <p>Translate the article.</p>
+        <div class="sponsored-card">Do not translate the sponsored copy.</div>
+      </main>
+    `;
+
+    expect(collectPageSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Translate the article.' },
+    ]);
   });
 });

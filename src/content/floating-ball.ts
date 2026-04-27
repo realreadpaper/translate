@@ -4,6 +4,7 @@ import type {
   StartPageTranslationMessage,
 } from '../shared/messages';
 import { logDebug } from '../shared/debug';
+import { cleanAds } from './ad-cleaner';
 import { containsTranslatableText, extractSegments } from './dom-extractor';
 
 type RuntimeMessage = StartPageTranslationMessage;
@@ -70,6 +71,7 @@ export function mountFloatingBall(
   }
 
   function collectNextViewportSegments(): SourceSegment[] {
+    cleanAds(root);
     const segments = extractSegments(root);
     const nextSegments = segments.filter((segment) => {
       const fingerprint = createSegmentFingerprint(segment);

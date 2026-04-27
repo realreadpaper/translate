@@ -16,6 +16,7 @@ Immersive AI Translate 是一个面向 Chrome / Edge 的浏览器扩展，用于
 ### 网页翻译
 
 - 使用 DOM TreeWalker 遍历可见文本节点，并归并到最近的可回填文本块，减少对特定网页结构的依赖。
+- 翻译前先隐藏常见广告、赞助内容和广告 iframe，避免广告文案进入翻译请求。
 - 自动跳过脚本、样式、代码块、输入框、隐藏节点和扩展自身控件。
 - 保留 X / Twitter 帖子正文兜底：`[data-testid="tweetText"]`。
 - 保留 Reddit 帖子和评论正文兜底：
@@ -181,21 +182,23 @@ tests/
 ### 悬浮球渐进式翻译
 
 1. Content script 挂载悬浮球。
-2. 用户点击悬浮球。
-3. `dom-extractor` 提取当前页面段落，并给真实 DOM 节点写入 `data-segment-id`。
-4. 悬浮球筛选当前视口附近且未翻译过的段落。
-5. Content script 发送 `START_PAGE_TRANSLATION`，并携带本批 `segments`。
-6. Background 强制将该请求作为 `html-page` 处理。
-7. Provider 翻译本批段落。
-8. Background 发送 `APPLY_TRANSLATION_RESULT` 回 content script。
-9. Content script 将译文插入到对应 `data-segment-id` 节点之后。
-10. 用户继续滚动时，悬浮球继续翻译新进入视口附近的段落。
+2. Content script 先运行广告清理器，隐藏命中的广告节点并标记为 `data-immersive-ignore="true"`。
+3. 用户点击悬浮球。
+4. 悬浮球再次运行广告清理器，确保动态广告不会进入本批翻译。
+5. `dom-extractor` 提取当前页面段落，并给真实 DOM 节点写入 `data-segment-id`。
+6. 悬浮球筛选当前视口附近且未翻译过的段落。
+7. Content script 发送 `START_PAGE_TRANSLATION`，并携带本批 `segments`。
+8. Background 强制将该请求作为 `html-page` 处理。
+9. Provider 翻译本批段落。
+10. Background 发送 `APPLY_TRANSLATION_RESULT` 回 content script。
+11. Content script 将译文插入到对应 `data-segment-id` 节点之后。
+12. 用户继续滚动时，悬浮球继续翻译新进入视口附近的段落。
 
 ### Popup 全页翻译
 
 1. Popup 发送 `START_PAGE_TRANSLATION`，通常不携带 `segments`。
 2. Background 请求 content script 执行 `COLLECT_PAGE_SEGMENTS`。
-3. Content script 提取整页段落。
+3. Content script 先运行广告清理器，再提取整页段落。
 4. Background 分批翻译并应用结果。
 
 ## 消息协议

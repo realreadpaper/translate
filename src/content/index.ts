@@ -10,6 +10,7 @@ import {
 import type { ExtensionSettings } from '../shared/types';
 import { loadSettings } from '../storage/settings';
 import { logDebug } from '../shared/debug';
+import { cleanAds, startAdCleaner } from './ad-cleaner';
 import { extractSegments } from './dom-extractor';
 import { mountFloatingBall } from './floating-ball';
 import { applyTranslations, setDisplayMode } from './segment-renderer';
@@ -55,6 +56,7 @@ export async function initializeContentTranslation(
   { loadSettings, sendRuntimeMessage }: InitializeContentTranslationDependencies,
 ): Promise<ContentController> {
   const settings = await loadSettings();
+  startAdCleaner(root);
   logDebug('content translation initialized', {
     autoTranslateOnLoad: settings.autoTranslateOnLoad,
     displayMode: settings.displayMode,
@@ -71,6 +73,11 @@ export async function initializeContentTranslation(
   });
 
   return controller;
+}
+
+export function collectPageSegments(root: HTMLElement): Array<{ id: string; text: string }> {
+  cleanAds(root);
+  return extractSegments(root);
 }
 
 function createPassiveContentController(): ContentController {
@@ -90,7 +97,7 @@ function startAutoTranslationWhenReady(
     .then(() => {
       window.setTimeout(() => {
         logDebug('auto translate on load starting', {
-          segmentCount: extractSegments(root).length,
+          segmentCount: collectPageSegments(root).length,
         });
         void sendRuntimeMessage({ type: 'START_PAGE_TRANSLATION' });
       }, AUTO_TRANSLATE_SETTLE_MS);
@@ -108,13 +115,13 @@ function waitForDocumentLoaded(): Promise<void> {
 }
 
 function waitForTranslatableContent(root: HTMLElement): Promise<void> {
-  if (extractSegments(root).length > 0) {
+  if (collectPageSegments(root).length > 0) {
     return Promise.resolve();
   }
 
   return new Promise((resolve) => {
     const observer = new MutationObserver(() => {
-      if (extractSegments(root).length === 0) {
+      if (collectPageSegments(root).length === 0) {
         return;
       }
 
@@ -149,7 +156,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     logDebug('content message received', { type: message.type });
 
     if (message.type === 'COLLECT_PAGE_SEGMENTS') {
-      const segments = extractSegments(document.body);
+      const segments = collectPageSegments(document.body);
       logDebug('content collected page segments', { segmentCount: segments.length });
       sendResponse(segments);
       return true;
