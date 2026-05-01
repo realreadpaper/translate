@@ -68,10 +68,32 @@ describe('settings storage', () => {
       ...createDefaultSettings(),
       targetLanguage: 'ja',
       autoTranslateOnLoad: true,
+      enableYoutubeSubtitleTranslation: false,
+      enablePdfDocumentTranslation: true,
+      pdfOcrFallback: 'disabled' as const,
+      youtubeAsrFallback: 'confirm-first' as const,
+      subtitleDisplayStyle: 'overlay-top' as const,
+      translationCacheEnabled: false,
+      debugLoggingEnabled: true,
     };
 
     await saveSettings(settings);
 
     await expect(loadSettings()).resolves.toEqual(settings);
+  });
+
+  it('migrates saved settings that do not have pdf and youtube controls yet', async () => {
+    const legacySettings = createDefaultSettings() as Partial<ReturnType<typeof createDefaultSettings>>;
+    delete legacySettings.enableYoutubeSubtitleTranslation;
+    delete legacySettings.enablePdfDocumentTranslation;
+    delete legacySettings.pdfOcrFallback;
+    delete legacySettings.youtubeAsrFallback;
+    delete legacySettings.subtitleDisplayStyle;
+    delete legacySettings.translationCacheEnabled;
+    delete legacySettings.debugLoggingEnabled;
+
+    store.set('immersive-ai-translate.settings', legacySettings);
+
+    await expect(loadSettings()).resolves.toEqual(createDefaultSettings());
   });
 });

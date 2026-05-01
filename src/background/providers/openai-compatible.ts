@@ -1,8 +1,9 @@
 import type { ProviderAdapter } from './types';
 import {
+  buildTranslationSystemPrompt,
   parseTranslatedSegments,
-  TRANSLATION_SYSTEM_PROMPT,
 } from './parse-translated-segments';
+import { logDebug } from '../../shared/debug';
 
 export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
   id: 'openai-compatible',
@@ -22,7 +23,32 @@ export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
     return { ok: true };
   },
   async translateSegments(request, settings, transport) {
+    const requestPayload = {
+      segments: request.segments,
+      requiredOutputIds: request.segments.map((segment) => segment.id),
+      sourceLanguage: request.sourceLanguage,
+      targetLanguage: request.targetLanguage,
+      contentKind: request.contentKind ?? 'html-page',
+      outputContract: {
+        type: 'json_object',
+        schema: {
+          segments: request.segments.map((segment) => ({
+            id: segment.id,
+            translatedText: '<translate this segment text>',
+          })),
+        },
+      },
+    };
     try {
+      logDebug('openai-compatible translation request payload', {
+        providerId: 'openai-compatible',
+        model: settings.model,
+        baseUrl: settings.baseUrl,
+        contentKind: requestPayload.contentKind,
+        segmentCount: request.segments.length,
+        segments: request.segments,
+        requestPayload,
+      });
       const response = (await transport({
         url: `${settings.baseUrl.replace(/\/$/, '')}/chat/completions`,
         headers: {
@@ -33,15 +59,11 @@ export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
           messages: [
             {
               role: 'system',
-              content: TRANSLATION_SYSTEM_PROMPT,
+              content: buildTranslationSystemPrompt(request.contentKind),
             },
             {
               role: 'user',
-              content: JSON.stringify({
-                segments: request.segments,
-                sourceLanguage: request.sourceLanguage,
-                targetLanguage: request.targetLanguage,
-              }),
+              content: JSON.stringify(requestPayload),
             },
           ],
         },
@@ -50,10 +72,30 @@ export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
       };
 
       const content = response.choices?.[0]?.message?.content ?? '[]';
-      const segments = parseTranslatedSegments(content);
+      logDebug('openai-compatible translation raw response', {
+        providerId: 'openai-compatible',
+        contentKind: requestPayload.contentKind,
+        rawContent: content,
+      });
+      const segments = parseTranslatedSegments(content, request.segments);
+      logDebug('openai-compatible translation parsed result', {
+        providerId: 'openai-compatible',
+        contentKind: requestPayload.contentKind,
+        translatedCount: segments.length,
+        segments,
+      });
 
       return { ok: true, segments };
     } catch (error) {
+      logDebug('openai-compatible translation failed with raw error', {
+        providerId: 'openai-compatible',
+        contentKind: requestPayload.contentKind,
+        segmentCount: request.segments.length,
+        segments: request.segments,
+        message: getRawErrorMessage(error),
+        normalizedMessage: openAiCompatibleProvider.normalizeError(error),
+        status: getErrorStatus(error),
+      });
       return { ok: false, message: openAiCompatibleProvider.normalizeError(error) };
     }
   },
@@ -65,3 +107,19 @@ export const openAiCompatibleProvider: ProviderAdapter<'openai-compatible'> = {
     return 'Request failed for openai-compatible';
   },
 };
+
+function getErrorStatus(error: unknown): unknown {
+  return typeof error === 'object' && error && 'status' in error ? error.status : undefined;
+}
+
+function getRawErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error && 'message' in error) {
+    return String(error.message);
+  }
+
+  return String(error);
+}

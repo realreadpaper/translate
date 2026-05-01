@@ -1,16 +1,23 @@
 const DEBUG_PREFIX = '[Immersive AI Translate]';
+let runtimeDebugLoggingEnabled = false;
+
+export function configureRuntimeDebugLogging(enabled: boolean): void {
+  runtimeDebugLoggingEnabled = enabled;
+}
 
 export function isDebugLoggingEnabled(): boolean {
   const debugSetting = import.meta.env.VITE_EXTENSION_DEBUG_LOGS;
-  if (debugSetting === 'false') {
+  const releaseBuild = import.meta.env.VITE_RELEASE_BUILD === 'true';
+
+  if (releaseBuild || debugSetting === 'false') {
     return false;
   }
 
-  if (debugSetting === 'true') {
+  if (runtimeDebugLoggingEnabled || debugSetting === 'true') {
     return true;
   }
 
-  return import.meta.env.DEV;
+  return true;
 }
 
 export function logDebug(message: string, details?: Record<string, unknown>) {

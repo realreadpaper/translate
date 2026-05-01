@@ -11,6 +11,21 @@ describe('manifest', () => {
     if (manifest.background && 'service_worker' in manifest.background) {
       expect(manifest.background.service_worker).toBe('src/background/index.ts');
     }
+    expect(manifest.key).toBeTruthy();
     expect(manifest.content_scripts?.[0].js).toEqual(['src/content/index.ts']);
+    expect(manifest.permissions).toEqual(
+      expect.arrayContaining(['tabs', 'contextMenus']),
+    );
+    expect(manifest.permissions).not.toEqual(
+      expect.arrayContaining(['webNavigation', 'webRequest', 'declarativeNetRequest']),
+    );
+    expect(manifest.declarative_net_request).toBeUndefined();
+    expect(manifest.web_accessible_resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resources: expect.arrayContaining(['src/pdf/index.html']),
+        }),
+      ]),
+    );
   });
 });

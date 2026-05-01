@@ -1,0 +1,137 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #eef3e6;
+  color: #263126;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.pdf-workspace {
+  min-height: 100vh;
+}
+
+.pdf-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  border-bottom: 1px solid #cbd8c2;
+  background: rgba(244, 248, 236, 0.96);
+}
+
+.pdf-eyebrow {
+  margin: 0 0 4px;
+  color: #63715c;
+  font-size: 12px;
+}
+
+.pdf-toolbar h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pdf-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.pdf-actions button {
+  min-width: 64px;
+  border: 1px solid #bccab4;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: #f8faef;
+  color: #2f3b2c;
+  cursor: pointer;
+}
+
+.pdf-actions button.is-active {
+  border-color: #507443;
+  background: #507443;
+  color: #fff;
+}
+
+.pdf-status {
+  padding: 12px 22px;
+  border-bottom: 1px solid #cbd8c2;
+  background: #dfead1;
+  color: #37542f;
+  font-size: 14px;
+}
+
+.pdf-pages {
+  display: grid;
+  gap: 14px;
+  width: min(1180px, calc(100% - 28px));
+  margin: 18px auto;
+}
+
+.pdf-page {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #cbd8c2;
+  border-radius: 8px;
+  background: #fbf8ec;
+}
+
+.pdf-pages--original-only .pdf-page,
+.pdf-pages--translated-only .pdf-page {
+  grid-template-columns: 1fr;
+}
+
+.pdf-page > header {
+  grid-column: 1 / -1;
+  color: #65725e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pdf-page-column {
+  min-width: 0;
+  border: 1px solid #d9dfca;
+  border-radius: 6px;
+  padding: 12px;
+  background: #fffdf2;
+}
+
+.pdf-page-column h2 {
+  margin: 0 0 8px;
+  color: #52634a;
+  font-size: 13px;
+}
+
+.pdf-page-column p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.pdf-page-column p.is-error {
+  color: #8a3324;
+}
+
+@media (max-width: 760px) {
+  .pdf-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pdf-page {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,4 +1,6 @@
 export type DisplayMode = 'bilingual' | 'translated-only' | 'original-only';
+export type FallbackMode = 'confirm-first' | 'disabled';
+export type SubtitleDisplayStyle = 'overlay-bottom' | 'overlay-top';
 
 export type ProviderId = 'openai-compatible' | 'deepseek' | 'traditional';
 
@@ -31,5 +33,12 @@ export type ExtensionSettings = {
   targetLanguage: string;
   displayMode: DisplayMode;
   autoTranslateOnLoad: boolean;
+  enableYoutubeSubtitleTranslation: boolean;
+  enablePdfDocumentTranslation: boolean;
+  pdfOcrFallback: FallbackMode;
+  youtubeAsrFallback: FallbackMode;
+  subtitleDisplayStyle: SubtitleDisplayStyle;
+  translationCacheEnabled: boolean;
+  debugLoggingEnabled: boolean;
   providers: ProviderSettingsById;
 };

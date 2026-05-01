@@ -54,6 +54,15 @@ describe('Options App', () => {
       target: { value: 'deepseek-v4-flash' },
     });
     fireEvent.click(screen.getByLabelText('页面加载后自动翻译'));
+    fireEvent.click(screen.getByLabelText('YouTube 字幕翻译'));
+    fireEvent.change(screen.getByLabelText('PDF OCR 兜底'), {
+      target: { value: 'disabled' },
+    });
+    fireEvent.change(screen.getByLabelText('字幕显示位置'), {
+      target: { value: 'overlay-top' },
+    });
+    fireEvent.click(screen.getByLabelText('翻译缓存'));
+    fireEvent.click(screen.getByLabelText('调试日志'));
     const saveButton = screen.getByRole('button', { name: '保存设置' });
     fireEvent.click(saveButton);
 
@@ -65,6 +74,13 @@ describe('Options App', () => {
         sourceLanguage: 'en',
         targetLanguage: 'ja',
         autoTranslateOnLoad: true,
+        enableYoutubeSubtitleTranslation: false,
+        enablePdfDocumentTranslation: true,
+        pdfOcrFallback: 'disabled',
+        youtubeAsrFallback: 'confirm-first',
+        subtitleDisplayStyle: 'overlay-top',
+        translationCacheEnabled: false,
+        debugLoggingEnabled: true,
         providers: expect.objectContaining({
           deepseek: expect.objectContaining({
             apiKey: 'sk-test',
@@ -86,16 +102,20 @@ describe('Options App', () => {
     fireEvent.click(connectionButton);
 
     expect((connectionButton as HTMLButtonElement).disabled).toBe(true);
-    expect(testConnection).toHaveBeenCalledWith(
-      expect.objectContaining({
-        providerId: 'deepseek',
-        providers: expect.objectContaining({
-          deepseek: expect.objectContaining({
-            apiKey: 'sk-test',
+    resolveSave?.();
+
+    await waitFor(() => {
+      expect(testConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerId: 'deepseek',
+          providers: expect.objectContaining({
+            deepseek: expect.objectContaining({
+              apiKey: 'sk-test',
+            }),
           }),
         }),
-      }),
-    );
+      );
+    });
 
     resolveConnection?.();
 

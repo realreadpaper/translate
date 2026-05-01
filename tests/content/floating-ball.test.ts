@@ -5,6 +5,10 @@ import { mountFloatingBall } from '../../src/content/floating-ball';
 describe('mountFloatingBall', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: new URL('https://example.com/article'),
+    });
     vi.useRealTimers();
   });
 
@@ -36,6 +40,63 @@ describe('mountFloatingBall', () => {
 
     controller.markTranslated();
     expect(trigger.dataset.state).toBe('translated');
+  });
+
+  it('starts a youtube subtitle job on YouTube watch pages', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: new URL('https://www.youtube.com/watch?v=demo'),
+    });
+    const sendRuntimeMessage = vi.fn().mockResolvedValue({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: [{ id: 'cue-0', translatedText: '你好' }],
+      failedBatches: [],
+    });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    expect(sendRuntimeMessage).toHaveBeenCalledWith({
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'youtube-subtitles',
+    });
+  });
+
+  it('opens the pdf translation workspace from the floating ball on pdf pages', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: new URL('https://arxiv.org/pdf/2604.26805'),
+    });
+    const sendRuntimeMessage = vi.fn().mockResolvedValue({
+      type: 'TRANSLATION_JOB_REDIRECTED',
+      target: {
+        kind: 'pdf-document',
+        tabId: 7,
+        url: 'https://arxiv.org/pdf/2604.26805',
+        sourceKind: 'http-url',
+        displayName: '2604.26805.pdf',
+      },
+      workspaceTabId: 8,
+    });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    expect(sendRuntimeMessage).toHaveBeenCalledWith({
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'pdf-document',
+    });
+    expect(trigger.dataset.state).toBe('translated');
+    expect(trigger.title).toBe('已打开 PDF 翻译工作台：2604.26805.pdf');
   });
 
   it('shows an error state when translation request fails', async () => {

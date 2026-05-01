@@ -1,4 +1,5 @@
 import { chunkSegments } from './batch';
+import { logDebug } from '../../shared/debug';
 
 type SourceSegment = { id: string; text: string };
 type TranslatedSegment = { id: string; translatedText: string };
@@ -8,12 +9,14 @@ type TranslateContext = {
   sourceLanguage: string;
   targetLanguage: string;
   providerSettings: unknown;
+  contentKind?: 'html-page' | 'pdf-document' | 'youtube-subtitles';
 };
 
 type TranslateBatchParams = {
   segments: SourceSegment[];
   sourceLanguage: string;
   targetLanguage: string;
+  contentKind?: 'html-page' | 'pdf-document' | 'youtube-subtitles';
 };
 
 type TranslateBatchResult =
@@ -21,6 +24,7 @@ type TranslateBatchResult =
   | { ok: false; message: string };
 
 type TranslateBatch = (params: TranslateBatchParams) => Promise<TranslateBatchResult>;
+const MAX_MALFORMED_BATCH_ATTEMPTS = 2;
 
 export async function translatePageSegments(
   segments: SourceSegment[],
@@ -35,45 +39,137 @@ export async function translatePageSegments(
   const batches = chunkSegments(segments, batchSize);
   const translated: TranslatedSegment[] = [];
   const failedBatches: Array<{ segmentIds: string[]; message: string }> = [];
+  logDebug('translator batches created', {
+    providerId: context.providerId,
+    contentKind: context.contentKind ?? 'html-page',
+    segmentCount: segments.length,
+    batchCount: batches.length,
+    batchSize,
+  });
 
-  for (const batch of batches) {
-    let result: TranslateBatchResult;
-    try {
-      result = await translateBatch({
-        segments: batch,
-        sourceLanguage: context.sourceLanguage,
-        targetLanguage: context.targetLanguage,
-      });
-    } catch (error) {
-      failedBatches.push({
-        segmentIds: batch.map((segment) => segment.id),
-        message: error instanceof Error ? error.message : String(error),
-      });
-      continue;
-    }
+  for (const [batchIndex, batch] of batches.entries()) {
+    let completed = false;
 
-    if (result.ok) {
-      if (!Array.isArray(result.segments)) {
+    for (let attempt = 1; attempt <= MAX_MALFORMED_BATCH_ATTEMPTS; attempt += 1) {
+      let result: TranslateBatchResult;
+      logDebug('translator batch starting', {
+        batchIndex,
+        attempt,
+        maxAttempts: MAX_MALFORMED_BATCH_ATTEMPTS,
+        segmentCount: batch.length,
+        firstSegmentId: batch[0]?.id,
+        lastSegmentId: batch.at(-1)?.id,
+      });
+      try {
+        result = await translateBatch({
+          segments: batch,
+          sourceLanguage: context.sourceLanguage,
+          targetLanguage: context.targetLanguage,
+          contentKind: context.contentKind,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isMalformedTranslationError(message) && attempt < MAX_MALFORMED_BATCH_ATTEMPTS) {
+          logDebug('translator batch retrying after thrown malformed result', {
+            batchIndex,
+            attempt,
+            message,
+          });
+          continue;
+        }
+
         failedBatches.push({
           segmentIds: batch.map((segment) => segment.id),
-          message: 'Provider returned malformed translated segments.',
+          message,
+        });
+        logDebug('translator batch threw', {
+          batchIndex,
+          attempt,
+          message,
+        });
+        completed = true;
+        break;
+      }
+
+      if (result.ok) {
+        if (!Array.isArray(result.segments)) {
+          const message = 'Provider returned malformed translated segments.';
+          if (attempt < MAX_MALFORMED_BATCH_ATTEMPTS) {
+            logDebug('translator batch retrying malformed result', {
+              batchIndex,
+              attempt,
+              message,
+            });
+            continue;
+          }
+
+          logDebug('translator batch malformed result', { batchIndex, attempt });
+          failedBatches.push({
+            segmentIds: batch.map((segment) => segment.id),
+            message,
+          });
+          completed = true;
+          break;
+        }
+
+        logDebug('translator batch completed', {
+          batchIndex,
+          attempt,
+          translatedCount: result.segments.length,
+        });
+        translated.push(...result.segments);
+        completed = true;
+        break;
+      }
+
+      if (isMalformedTranslationError(result.message) && attempt < MAX_MALFORMED_BATCH_ATTEMPTS) {
+        logDebug('translator batch retrying failed malformed result', {
+          batchIndex,
+          attempt,
+          message: result.message,
         });
         continue;
       }
 
-      translated.push(...result.segments);
-      continue;
+      logDebug('translator batch failed', {
+        batchIndex,
+        attempt,
+        message: result.message,
+      });
+      failedBatches.push({
+        segmentIds: batch.map((segment) => segment.id),
+        message: result.message,
+      });
+      completed = true;
+      break;
     }
 
-    failedBatches.push({
-      segmentIds: batch.map((segment) => segment.id),
-      message: result.message,
-    });
+    if (!completed) {
+      failedBatches.push({
+        segmentIds: batch.map((segment) => segment.id),
+        message: 'Provider returned malformed translated segments.',
+      });
+    }
   }
 
+  logDebug('translator finished', {
+    status: failedBatches.length > 0 ? 'partial-success' : 'success',
+    translatedCount: translated.length,
+    failedBatchCount: failedBatches.length,
+  });
   return {
     status: failedBatches.length > 0 ? 'partial-success' : 'success',
     translated,
     failedBatches,
   };
+}
+
+function isMalformedTranslationError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('malformed translated segments') ||
+    normalized.includes('unexpected token') ||
+    message.includes('格式不正确的翻译结果') ||
+    message.includes('无法解析的翻译结果')
+  );
 }

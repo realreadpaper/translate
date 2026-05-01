@@ -1,4 +1,6 @@
 import { createMessageHandler } from './messaging';
+import { createPdfContextMenuController } from './pdf-context-menu';
+import { createPdfWorkspaceOpener, createPdfWorkspaceUrl } from './pdf-workspace';
 import { detectTranslationTarget } from './targets/detect-target';
 import { testProviderConnection } from './providers/connection';
 import { getProvider } from './providers/registry';
@@ -11,6 +13,8 @@ import type {
   ApplyPageTranslationMessage,
   ApplyTranslationResultMessage,
   CollectPageSegmentsMessage,
+  CollectYoutubeSubtitleSegmentsMessage,
+  OpenPdfWorkspaceMessage,
   StartPageTranslationMessage,
   StartTranslationJobMessage,
   SetDisplayModeMessage,
@@ -28,6 +32,10 @@ import type {
 
 type SendMessageToTab = {
   (tabId: number, message: CollectPageSegmentsMessage): Promise<Array<{ id: string; text: string }>>;
+  (
+    tabId: number,
+    message: CollectYoutubeSubtitleSegmentsMessage,
+  ): Promise<Array<{ id: string; text: string }>>;
   (tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
   (tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
   (tabId: number, message: SetDisplayModeMessage): Promise<void>;
@@ -45,6 +53,13 @@ async function translatePage(
       | TraditionalProviderSettings;
   },
 ) {
+  logDebug('background translation provider dispatch', {
+    providerId: context.providerId,
+    sourceLanguage: context.sourceLanguage,
+    targetLanguage: context.targetLanguage,
+    segmentCount: segments.length,
+  });
+
   switch (context.providerId) {
     case 'openai-compatible': {
       const provider = getProvider('openai-compatible');
@@ -54,12 +69,19 @@ async function translatePage(
         throw new Error(validation.message);
       }
 
-      return translatePageSegments(
+      const result = await translatePageSegments(
         segments,
         context,
         (request) => provider.translateSegments(request, settings, postJson),
         DEFAULT_PAGE_TRANSLATION_BATCH_SIZE,
       );
+      logDebug('background translation provider completed', {
+        providerId: context.providerId,
+        status: result.status,
+        translatedCount: result.translated.length,
+        failedBatchCount: result.failedBatches.length,
+      });
+      return result;
     }
     case 'deepseek': {
       const provider = getProvider('deepseek');
@@ -69,12 +91,19 @@ async function translatePage(
         throw new Error(validation.message);
       }
 
-      return translatePageSegments(
+      const result = await translatePageSegments(
         segments,
         context,
         (request) => provider.translateSegments(request, settings, postJson),
         DEFAULT_PAGE_TRANSLATION_BATCH_SIZE,
       );
+      logDebug('background translation provider completed', {
+        providerId: context.providerId,
+        status: result.status,
+        translatedCount: result.translated.length,
+        failedBatchCount: result.failedBatches.length,
+      });
+      return result;
     }
     case 'traditional': {
       const provider = getProvider('traditional');
@@ -84,12 +113,19 @@ async function translatePage(
         throw new Error(validation.message);
       }
 
-      return translatePageSegments(
+      const result = await translatePageSegments(
         segments,
         context,
         (request) => provider.translateSegments(request, settings, postJson),
         DEFAULT_PAGE_TRANSLATION_BATCH_SIZE,
       );
+      logDebug('background translation provider completed', {
+        providerId: context.providerId,
+        status: result.status,
+        translatedCount: result.translated.length,
+        failedBatchCount: result.failedBatches.length,
+      });
+      return result;
     }
   }
 }
@@ -98,6 +134,10 @@ function sendMessageToTab(
   tabId: number,
   message: CollectPageSegmentsMessage,
 ): Promise<Array<{ id: string; text: string }>>;
+function sendMessageToTab(
+  tabId: number,
+  message: CollectYoutubeSubtitleSegmentsMessage,
+): Promise<Array<{ id: string; text: string }>>;
 function sendMessageToTab(tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
 function sendMessageToTab(tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
 function sendMessageToTab(tabId: number, message: SetDisplayModeMessage): Promise<void>;
@@ -105,6 +145,7 @@ function sendMessageToTab(
   tabId: number,
   message:
     | CollectPageSegmentsMessage
+    | CollectYoutubeSubtitleSegmentsMessage
     | ApplyPageTranslationMessage
     | ApplyTranslationResultMessage
     | SetDisplayModeMessage,
@@ -119,7 +160,9 @@ async function detectTarget(
   requestedKind?: TranslationTargetKind,
 ): Promise<TranslationTarget> {
   const tab = await chrome.tabs.get(tabId);
-  const target = await detectTranslationTarget(tab, requestedKind);
+  const target = await detectTranslationTarget(tab, requestedKind, {
+    getContentType: getUrlContentType,
+  });
   logDebug('detected translation target', {
     tabId,
     requestedKind,
@@ -129,12 +172,40 @@ async function detectTarget(
   return target;
 }
 
-async function openPdfWorkspace(target: TranslationTarget): Promise<number> {
-  logDebug('pdf workspace placeholder invoked', {
-    tabId: target.tabId,
-    targetKind: target.kind,
+async function getUrlContentType(url: string): Promise<string> {
+  const response = await fetch(url, { method: 'HEAD' });
+  return response.headers.get('content-type') ?? '';
+}
+
+const openPdfWorkspace = createPdfWorkspaceOpener({
+  getExtensionUrl: (path) => chrome.runtime.getURL(path),
+  createTab: (properties) => chrome.tabs.create(properties),
+});
+
+async function openPdfWorkspaceInCurrentTab(
+  target: TranslationTarget,
+): Promise<number> {
+  if (target.kind !== 'pdf-document') {
+    throw new Error(`Unsupported PDF workspace target: ${target.kind}`);
+  }
+
+  const tab = await chrome.tabs.update(target.tabId, {
+    active: true,
+    url: createPdfWorkspaceUrl(
+      {
+        sourceUrl: target.url,
+        displayName: target.displayName,
+        sourceKind: target.sourceKind,
+      },
+      (path) => chrome.runtime.getURL(path),
+    ),
   });
-  return target.tabId;
+
+  if (typeof tab?.id !== 'number') {
+    throw new Error('PDF workspace tab id is unavailable.');
+  }
+
+  return tab.id;
 }
 
 const handler = createMessageHandler({
@@ -146,12 +217,46 @@ const handler = createMessageHandler({
   debugLog: logDebug,
 });
 
+const pdfContextMenuController = createPdfContextMenuController({
+  createMenu: (properties) => chrome.contextMenus.create(properties),
+  detectTarget: (tab) =>
+    detectTranslationTarget(tab, undefined, {
+      getContentType: getUrlContentType,
+    }),
+  openPdfWorkspace,
+  debugLog: logDebug,
+});
+
+chrome.contextMenus.removeAll(() => {
+  pdfContextMenuController.install();
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  void pdfContextMenuController.handleClicked(info, tab).catch((error) => {
+    logDebug('pdf context menu failed', {
+      tabId: tab?.id,
+      pageUrl: info.pageUrl,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  });
+});
+
 function isSetDisplayModeMessage(message: unknown): message is SetDisplayModeMessage {
   return (
     typeof message === 'object' &&
     message !== null &&
     'type' in message &&
     message.type === 'SET_DISPLAY_MODE'
+  );
+}
+
+function isOpenPdfWorkspaceMessage(message: unknown): message is OpenPdfWorkspaceMessage {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'type' in message &&
+    message.type === 'OPEN_PDF_WORKSPACE'
   );
 }
 
@@ -271,6 +376,31 @@ chrome.runtime.onMessage.addListener((
         message: error instanceof Error ? error.message : String(error),
       });
     });
+
+    return true;
+  }
+
+  if (isOpenPdfWorkspaceMessage(message)) {
+    const tabId = typeof message.tabId === 'number' ? message.tabId : sender.tab?.id;
+    if (typeof tabId !== 'number') {
+      sendResponse({
+        type: 'PAGE_TRANSLATION_FAILED',
+        message: 'Active tab id is unavailable.',
+      });
+      return true;
+    }
+
+    chrome.tabs.get(tabId)
+      .then((tab) => pdfContextMenuController.openFromTab(tab))
+      .then(() => {
+        sendResponse({ type: 'TRANSLATION_JOB_STARTED' });
+      })
+      .catch((error) => {
+        sendResponse({
+          type: 'PAGE_TRANSLATION_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
 
     return true;
   }

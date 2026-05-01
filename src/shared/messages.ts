@@ -19,8 +19,19 @@ export type SetDisplayModeMessage = {
   displayMode: DisplayMode;
 };
 
+export type OpenPdfWorkspaceMessage = {
+  type: 'OPEN_PDF_WORKSPACE';
+  tabId?: number;
+};
+
 export type CollectPageSegmentsMessage = {
   type: 'COLLECT_PAGE_SEGMENTS';
+};
+
+export type CollectYoutubeSubtitleSegmentsMessage = {
+  type: 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS';
+  target: Extract<TranslationTarget, { kind: 'youtube-subtitles' }>;
+  preferredLanguage: string;
 };
 
 export type ApplyPageTranslationMessage = {
@@ -34,6 +45,7 @@ export type ApplyTranslationResultMessage = {
   target: TranslationTarget;
   translated: Array<{ id: string; translatedText: string }>;
   displayMode: DisplayMode;
+  subtitleDisplayStyle?: import('./types').SubtitleDisplayStyle;
 };
 
 export type PageTranslationFinishedMessage = {
@@ -51,7 +63,7 @@ export type TranslationJobStartedMessage = {
 
 export type TranslationJobRedirectedMessage = {
   type: 'TRANSLATION_JOB_REDIRECTED';
-  target: TranslationTarget;
+  target: Extract<TranslationTarget, { kind: 'pdf-document' }>;
   workspaceTabId: number;
 };
 

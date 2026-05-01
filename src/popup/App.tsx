@@ -1,26 +1,20 @@
 import { useState } from 'react';
 
-import type {
-  PageTranslationFailedMessage,
-  PageTranslationFinishedMessage,
-} from '../shared/messages';
 import type { DisplayMode } from '../shared/types';
 
-type RuntimeMessage =
-  | { type: 'START_PAGE_TRANSLATION'; tabId: number }
-  | {
-      type: 'SET_DISPLAY_MODE';
-      tabId: number;
-      displayMode: DisplayMode;
-    };
-
-type TranslationResponse = PageTranslationFinishedMessage | PageTranslationFailedMessage;
+type RuntimeMessage = {
+  type: 'SET_DISPLAY_MODE';
+  tabId: number;
+  displayMode: DisplayMode;
+};
 
 type AppProps = {
   getActiveTabId: () => Promise<number>;
-  sendRuntimeMessage: (message: RuntimeMessage) => Promise<void | TranslationResponse>;
+  sendRuntimeMessage: (message: RuntimeMessage) => Promise<void>;
   autoTranslateOnLoad: boolean;
   updateAutoTranslateOnLoad: (enabled: boolean) => Promise<void>;
+  activeTabKind?: 'html-page' | 'pdf-document' | 'youtube-subtitles';
+  openPdfWorkspace?: () => Promise<void>;
   providerName?: string;
   targetLanguageLabel?: string;
   openOptionsPage?: () => Promise<void> | void;
@@ -37,61 +31,35 @@ export function App({
   sendRuntimeMessage,
   autoTranslateOnLoad,
   updateAutoTranslateOnLoad,
+  activeTabKind = 'html-page',
+  openPdfWorkspace,
   providerName = 'DeepSeek',
   targetLanguageLabel = '简体中文',
   openOptionsPage,
 }: AppProps) {
-  const [translating, setTranslating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bilingual');
   const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(autoTranslateOnLoad);
   const [savingAutoTranslate, setSavingAutoTranslate] = useState(false);
-
-  async function handleTranslate() {
-    setTranslating(true);
-    setStatusMessage('');
-
-    try {
-      const tabId = await getActiveTabId();
-      const response = (await sendRuntimeMessage({
-        type: 'START_PAGE_TRANSLATION',
-        tabId,
-      })) as TranslationResponse;
-
-      if (response.type === 'PAGE_TRANSLATION_FAILED') {
-        setStatusMessage(`翻译失败：${response.message}`);
-        return;
-      }
-
-      if (response.status === 'partial-success') {
-        setStatusMessage(
-          `已完成 ${response.translated.length} 段翻译，${response.failedBatches.length} 个批次失败`,
-        );
-        return;
-      }
-
-      setStatusMessage(`已完成 ${response.translated.length} 段翻译`);
-    } catch (error) {
-      setStatusMessage(
-        `翻译失败：${error instanceof Error ? error.message : String(error)}`,
-      );
-    } finally {
-      setTranslating(false);
-    }
-  }
+  const isPdfTab = activeTabKind === 'pdf-document';
 
   async function handleTranslatedOnly() {
     await handleDisplayModeChange('translated-only');
   }
 
   async function handleDisplayModeChange(nextMode: DisplayMode) {
-    const tabId = await getActiveTabId();
-    await sendRuntimeMessage({
-      type: 'SET_DISPLAY_MODE',
-      tabId,
-      displayMode: nextMode,
-    });
-    setDisplayMode(nextMode);
+    try {
+      const tabId = await getActiveTabId();
+      await sendRuntimeMessage({
+        type: 'SET_DISPLAY_MODE',
+        tabId,
+        displayMode: nextMode,
+      });
+      setDisplayMode(nextMode);
+      setStatusMessage(`显示模式已切换为：${MODE_LABELS[nextMode]}`);
+    } catch {
+      setStatusMessage('当前页面暂时无法切换显示模式，请刷新后通过悬浮球重试');
+    }
   }
 
   async function handleAutoTranslateToggle(nextValue: boolean) {
@@ -109,6 +77,20 @@ export function App({
       );
     } finally {
       setSavingAutoTranslate(false);
+    }
+  }
+
+  async function handleOpenPdfWorkspace() {
+    if (!openPdfWorkspace) {
+      setStatusMessage('当前 PDF 暂时无法打开护眼翻译工作台');
+      return;
+    }
+
+    try {
+      await openPdfWorkspace();
+      setStatusMessage('已打开护眼 PDF 翻译工作台');
+    } catch (error) {
+      setStatusMessage(`打开失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -139,19 +121,31 @@ export function App({
             <span>
               {autoTranslateEnabled
                 ? '进入页面后自动执行翻译'
-                : '关闭后通过悬浮球或下方按钮手动执行'}
+                : '关闭后通过页面悬浮球手动执行'}
             </span>
           </label>
         </section>
 
-        <button
-          className="popup-primary-button"
-          type="button"
-          disabled={translating}
-          onClick={() => void handleTranslate()}
-        >
-          {translating ? '执行中...' : '手动执行本页翻译'}
-        </button>
+        <section className="popup-status-card">
+          <div className="popup-section-header">
+            <span>翻译入口</span>
+            <strong>{isPdfTab ? '右键菜单' : '悬浮球'}</strong>
+          </div>
+          {isPdfTab ? (
+            <>
+              <p className="popup-status-message">PDF 默认使用浏览器阅读器，右键选择「护眼翻译此 PDF」进入工作台</p>
+              <button className="popup-secondary-link" type="button" onClick={() => void handleOpenPdfWorkspace()}>
+                护眼翻译此 PDF
+              </button>
+              <p className="popup-status-meta">工作台会使用护眼色调，并按页增量翻译。</p>
+            </>
+          ) : (
+            <>
+              <p className="popup-status-message">在页面右下角点击悬浮球「译」开始翻译</p>
+              <p className="popup-status-meta">网页和 YouTube 从页面内触发，PDF 使用右键菜单。</p>
+            </>
+          )}
+        </section>
 
         <section className="popup-section">
           <div className="popup-section-header">
@@ -186,10 +180,10 @@ export function App({
 
         <section className="popup-status-card">
           <div className="popup-section-header">
-            <span>执行状态</span>
+            <span>状态</span>
             <strong>{targetLanguageLabel}</strong>
           </div>
-          <p className="popup-status-message">{statusMessage || '等待执行翻译'}</p>
+          <p className="popup-status-message">{statusMessage || '等待悬浮球触发'}</p>
           <p className="popup-status-meta">{`当前目标语言：${targetLanguageLabel}`}</p>
         </section>
 

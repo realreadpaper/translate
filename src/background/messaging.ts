@@ -1,6 +1,8 @@
 import type { ExtensionSettings } from '../shared/types';
+import { configureRuntimeDebugLogging } from '../shared/debug';
 import type {
   ApplyTranslationResultMessage,
+  CollectYoutubeSubtitleSegmentsMessage,
   ApplyPageTranslationMessage,
   CollectPageSegmentsMessage,
   PageTranslationFinishedMessage,
@@ -31,6 +33,7 @@ type TranslateContext = {
 
 type SendMessageToTab = {
   (tabId: number, message: CollectPageSegmentsMessage): Promise<SourceSegment[]>;
+  (tabId: number, message: CollectYoutubeSubtitleSegmentsMessage): Promise<SourceSegment[]>;
   (tabId: number, message: ApplyPageTranslationMessage): Promise<void>;
   (tabId: number, message: ApplyTranslationResultMessage): Promise<void>;
 };
@@ -98,6 +101,16 @@ export function createMessageHandler({
     }
 
     const settings = await loadSettings();
+    configureRuntimeDebugLogging(settings.debugLoggingEnabled);
+    debugLog('background settings loaded for translation job', {
+      providerId: settings.providerId,
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+      displayMode: settings.displayMode,
+      enablePdfDocumentTranslation: settings.enablePdfDocumentTranslation,
+      enableYoutubeSubtitleTranslation: settings.enableYoutubeSubtitleTranslation,
+      debugLoggingEnabled: settings.debugLoggingEnabled,
+    });
     const requestedKind = isStartPageTranslationMessage(message) ? 'html-page' : message.targetKind;
     const target = await detectTarget(message.tabId, requestedKind);
     debugLog('routing translation job', {
@@ -109,6 +122,10 @@ export function createMessageHandler({
     });
 
     if (target.kind === 'pdf-document') {
+      if (settings.enablePdfDocumentTranslation === false) {
+        throw new Error('PDF 文档翻译已在设置中关闭。');
+      }
+
       const workspaceTabId = await openPdfWorkspace(target, settings);
       debugLog('pdf-document translation redirected', {
         tabId: target.tabId,
@@ -124,13 +141,62 @@ export function createMessageHandler({
     }
 
     if (target.kind === 'youtube-subtitles') {
+      if (settings.enableYoutubeSubtitleTranslation === false) {
+        throw new Error('YouTube 字幕翻译已在设置中关闭。');
+      }
+
       debugLog('youtube-subtitles translation started', {
         tabId: target.tabId,
         videoId: target.videoId,
       });
-      return {
-        type: 'TRANSLATION_JOB_STARTED',
+      const collectedSegments: unknown = await sendMessageToTab(message.tabId, {
+        type: 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS',
         target,
+        preferredLanguage: settings.sourceLanguage,
+      });
+      if (!Array.isArray(collectedSegments)) {
+        const message =
+          typeof collectedSegments === 'object' &&
+          collectedSegments !== null &&
+          'message' in collectedSegments
+            ? String(collectedSegments.message)
+            : '字幕采集返回了无效结果。';
+        throw new Error(message);
+      }
+
+      const segments = collectedSegments;
+      debugLog('youtube-subtitles segments collected', {
+        tabId: target.tabId,
+        segmentCount: segments.length,
+      });
+      if (segments.length === 0) {
+        if (settings.youtubeAsrFallback === 'disabled') {
+          throw new Error('当前视频没有可用字幕轨道，ASR 兜底已在设置中关闭。');
+        }
+        throw new Error('当前视频没有可用字幕轨道。ASR 兜底已预留确认入口，尚未接入识别服务。');
+      }
+
+      const translationResult = await translatePage(segments, {
+        providerId: settings.providerId,
+        sourceLanguage: settings.sourceLanguage,
+        targetLanguage: settings.targetLanguage,
+        providerSettings: settings.providers[settings.providerId],
+      });
+
+      await sendMessageToTab(message.tabId, {
+        type: 'APPLY_TRANSLATION_RESULT',
+        target,
+        translated: translationResult.translated,
+        displayMode: settings.displayMode,
+        subtitleDisplayStyle: settings.subtitleDisplayStyle,
+      });
+
+      return {
+        type: 'PAGE_TRANSLATION_FINISHED',
+        target,
+        status: translationResult.status,
+        translated: translationResult.translated,
+        failedBatches: translationResult.failedBatches,
       };
     }
 

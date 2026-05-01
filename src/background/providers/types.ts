@@ -6,6 +6,7 @@ export type TranslationRequest = {
   segments: Array<{ id: string; text: string }>;
   sourceLanguage: string;
   targetLanguage: string;
+  contentKind?: 'html-page' | 'pdf-document' | 'youtube-subtitles';
 };
 
 export type TranslationResult =

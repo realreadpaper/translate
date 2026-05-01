@@ -16,6 +16,14 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
   const [connectionMessage, setConnectionMessage] = useState('');
   const selectedProvider = settings.providerId;
 
+  function persistSettings(nextSettings: ExtensionSettings) {
+    setSettings(nextSettings);
+    setStatusMessage('正在自动保存...');
+    void saveSettings(nextSettings)
+      .then(() => setStatusMessage('已自动保存'))
+      .catch(() => setStatusMessage('自动保存失败'));
+  }
+
   async function handleSave() {
     setSaving(true);
     setStatusMessage('');
@@ -35,6 +43,8 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
     setConnectionMessage('');
 
     try {
+      await saveSettings(settings);
+      setStatusMessage('保存成功');
       await testConnection(settings);
       setConnectionMessage('连接成功');
     } catch (error) {
@@ -61,7 +71,9 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
           <nav aria-label="设置导航">
             <a className="is-active" href="#service-config">服务配置</a>
             <a href="#translation-settings">翻译设置</a>
+            <a href="#target-settings">目标能力</a>
             <a href="#display-settings">显示模式</a>
+            <a href="#debug-settings">调试</a>
             <a href="#connection-check">连接检查</a>
           </nav>
         </aside>
@@ -82,7 +94,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                 aria-label="当前服务"
                 value={settings.providerId}
                 onChange={(event) =>
-                  setSettings({
+                  persistSettings({
                     ...settings,
                     providerId: event.target.value as ExtensionSettings['providerId'],
                   })
@@ -103,7 +115,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     type="password"
                     value={settings.providers.deepseek.apiKey}
                     onChange={(event) =>
-                      setSettings({
+                      persistSettings({
                         ...settings,
                         providers: {
                           ...settings.providers,
@@ -122,7 +134,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     aria-label="DeepSeek Base URL"
                     value={settings.providers.deepseek.baseUrl}
                     onChange={(event) =>
-                      setSettings({
+                      persistSettings({
                         ...settings,
                         providers: {
                           ...settings.providers,
@@ -141,7 +153,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     aria-label="DeepSeek Model"
                     value={settings.providers.deepseek.model}
                     onChange={(event) =>
-                      setSettings({
+                      persistSettings({
                         ...settings,
                         providers: {
                           ...settings.providers,
@@ -166,7 +178,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     type="password"
                     value={settings.providers['openai-compatible'].apiKey}
                     onChange={(event) =>
-                      setSettings({
+                      persistSettings({
                         ...settings,
                         providers: {
                           ...settings.providers,
@@ -185,7 +197,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     aria-label="OpenAI Base URL"
                     value={settings.providers['openai-compatible'].baseUrl}
                     onChange={(event) =>
-                      setSettings({
+                      persistSettings({
                         ...settings,
                         providers: {
                           ...settings.providers,
@@ -204,7 +216,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     aria-label="OpenAI Model"
                     value={settings.providers['openai-compatible'].model}
                     onChange={(event) =>
-                      setSettings({
+                      persistSettings({
                         ...settings,
                         providers: {
                           ...settings.providers,
@@ -254,7 +266,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                   aria-label="源语言"
                   value={settings.sourceLanguage}
                   onChange={(event) =>
-                    setSettings({
+                    persistSettings({
                       ...settings,
                       sourceLanguage: event.target.value,
                     })
@@ -267,7 +279,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                   aria-label="目标语言"
                   value={settings.targetLanguage}
                   onChange={(event) =>
-                    setSettings({
+                    persistSettings({
                       ...settings,
                       targetLanguage: event.target.value,
                     })
@@ -280,7 +292,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                   aria-label="默认展示模式"
                   value={settings.displayMode}
                   onChange={(event) =>
-                    setSettings({
+                    persistSettings({
                       ...settings,
                       displayMode: event.target.value as ExtensionSettings['displayMode'],
                     })
@@ -300,7 +312,7 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     type="checkbox"
                     checked={settings.autoTranslateOnLoad}
                     onChange={(event) =>
-                      setSettings({
+                      persistSettings({
                         ...settings,
                         autoTranslateOnLoad: event.target.checked,
                       })
@@ -312,6 +324,156 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                   <span className="options-switch-copy">
                     开启后进入页面立即翻译，关闭后通过悬浮球手动触发。
                   </span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section className="options-card" id="target-settings">
+            <div className="options-card-header">
+              <div>
+                <p className="options-card-eyebrow">Targets</p>
+                <h2>目标能力</h2>
+              </div>
+            </div>
+
+            <div className="field-grid">
+              <div className="field options-toggle-field">
+                <span>YouTube 字幕翻译</span>
+                <label className="options-switch" htmlFor="youtube-subtitle-translation">
+                  <input
+                    id="youtube-subtitle-translation"
+                    aria-label="YouTube 字幕翻译"
+                    type="checkbox"
+                    checked={settings.enableYoutubeSubtitleTranslation}
+                    onChange={(event) =>
+                      persistSettings({
+                        ...settings,
+                        enableYoutubeSubtitleTranslation: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">使用视频已有字幕轨道生成双语 overlay。</span>
+                </label>
+              </div>
+
+              <div className="field options-toggle-field">
+                <span>PDF 文档翻译</span>
+                <label className="options-switch" htmlFor="pdf-document-translation">
+                  <input
+                    id="pdf-document-translation"
+                    aria-label="PDF 文档翻译"
+                    type="checkbox"
+                    checked={settings.enablePdfDocumentTranslation}
+                    onChange={(event) =>
+                      persistSettings({
+                        ...settings,
+                        enablePdfDocumentTranslation: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">打开独立工作台解析文本层并翻译。</span>
+                </label>
+              </div>
+
+              <label className="field">
+                <span>PDF OCR 兜底</span>
+                <select
+                  aria-label="PDF OCR 兜底"
+                  value={settings.pdfOcrFallback}
+                  onChange={(event) =>
+                    persistSettings({
+                      ...settings,
+                      pdfOcrFallback: event.target.value as ExtensionSettings['pdfOcrFallback'],
+                    })
+                  }
+                >
+                  <option value="confirm-first">需要时先确认</option>
+                  <option value="disabled">关闭</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>YouTube ASR 兜底</span>
+                <select
+                  aria-label="YouTube ASR 兜底"
+                  value={settings.youtubeAsrFallback}
+                  onChange={(event) =>
+                    persistSettings({
+                      ...settings,
+                      youtubeAsrFallback: event.target.value as ExtensionSettings['youtubeAsrFallback'],
+                    })
+                  }
+                >
+                  <option value="confirm-first">需要时先确认</option>
+                  <option value="disabled">关闭</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>字幕显示位置</span>
+                <select
+                  aria-label="字幕显示位置"
+                  value={settings.subtitleDisplayStyle}
+                  onChange={(event) =>
+                    persistSettings({
+                      ...settings,
+                      subtitleDisplayStyle: event.target.value as ExtensionSettings['subtitleDisplayStyle'],
+                    })
+                  }
+                >
+                  <option value="overlay-bottom">播放器底部</option>
+                  <option value="overlay-top">播放器顶部</option>
+                </select>
+              </label>
+
+              <div className="field options-toggle-field">
+                <span>翻译缓存</span>
+                <label className="options-switch" htmlFor="translation-cache-enabled">
+                  <input
+                    id="translation-cache-enabled"
+                    aria-label="翻译缓存"
+                    type="checkbox"
+                    checked={settings.translationCacheEnabled}
+                    onChange={(event) =>
+                      persistSettings({
+                        ...settings,
+                        translationCacheEnabled: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">保留缓存开关，为后续跨 PDF/字幕复用译文预留。</span>
+                </label>
+              </div>
+
+              <div className="field options-toggle-field" id="debug-settings">
+                <span>调试日志</span>
+                <label className="options-switch" htmlFor="debug-logging-enabled">
+                  <input
+                    id="debug-logging-enabled"
+                    aria-label="调试日志"
+                    type="checkbox"
+                    checked={settings.debugLoggingEnabled}
+                    onChange={(event) =>
+                      persistSettings({
+                        ...settings,
+                        debugLoggingEnabled: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">开启后在 Console 输出每一步执行链路，发布默认关闭。</span>
                 </label>
               </div>
             </div>

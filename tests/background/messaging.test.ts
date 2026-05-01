@@ -9,6 +9,12 @@ const defaultSettings = {
   targetLanguage: 'zh-CN',
   displayMode: 'bilingual' as const,
   autoTranslateOnLoad: false,
+  enableYoutubeSubtitleTranslation: true,
+  enablePdfDocumentTranslation: true,
+  pdfOcrFallback: 'confirm-first' as const,
+  youtubeAsrFallback: 'confirm-first' as const,
+  subtitleDisplayStyle: 'overlay-bottom' as const,
+  translationCacheEnabled: true,
   providers: {
     'openai-compatible': {
       apiKey: 'test-key',
@@ -285,9 +291,27 @@ describe('createMessageHandler', () => {
     expect(translatePage).not.toHaveBeenCalled();
   });
 
-  it('starts youtube-subtitles jobs without applying page translations', async () => {
-    const sendMessageToTab = vi.fn();
-    const translatePage = vi.fn();
+  it('translates youtube-subtitles jobs from collected cues and applies an overlay result', async () => {
+    const sendMessageToTab = vi
+      .fn()
+      .mockImplementation(async (_tabId: number, message: { type: string }) => {
+        if (message.type === 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS') {
+          return [
+            { id: 'cue-0', text: 'Hello everyone' },
+            { id: 'cue-1', text: 'Welcome back' },
+          ];
+        }
+
+        return undefined;
+      });
+    const translatePage = vi.fn().mockResolvedValue({
+      status: 'success',
+      translated: [
+        { id: 'cue-0', translatedText: '大家好' },
+        { id: 'cue-1', translatedText: '欢迎回来' },
+      ],
+      failedBatches: [],
+    });
     const target = {
       kind: 'youtube-subtitles',
       tabId: 7,
@@ -304,11 +328,39 @@ describe('createMessageHandler', () => {
     });
 
     await expect(handler({ type: 'START_TRANSLATION_JOB', tabId: 7 })).resolves.toEqual({
-      type: 'TRANSLATION_JOB_STARTED',
+      type: 'PAGE_TRANSLATION_FINISHED',
       target,
+      status: 'success',
+      translated: [
+        { id: 'cue-0', translatedText: '大家好' },
+        { id: 'cue-1', translatedText: '欢迎回来' },
+      ],
+      failedBatches: [],
     });
 
-    expect(sendMessageToTab).not.toHaveBeenCalled();
-    expect(translatePage).not.toHaveBeenCalled();
+    expect(sendMessageToTab).toHaveBeenNthCalledWith(1, 7, {
+      type: 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS',
+      target,
+      preferredLanguage: 'auto',
+    });
+    expect(translatePage).toHaveBeenCalledWith(
+      [
+        { id: 'cue-0', text: 'Hello everyone' },
+        { id: 'cue-1', text: 'Welcome back' },
+      ],
+      expect.objectContaining({
+        targetLanguage: 'zh-CN',
+      }),
+    );
+    expect(sendMessageToTab).toHaveBeenNthCalledWith(2, 7, {
+      type: 'APPLY_TRANSLATION_RESULT',
+      target,
+      translated: [
+        { id: 'cue-0', translatedText: '大家好' },
+        { id: 'cue-1', translatedText: '欢迎回来' },
+      ],
+      displayMode: 'bilingual',
+      subtitleDisplayStyle: 'overlay-bottom',
+    });
   });
 });

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { collectPageSegments, initializeContentTranslation } from '../../src/content/index';
+import {
+  collectPageSegments,
+  getIncomingMessageType,
+  initializeContentTranslation,
+} from '../../src/content/index';
 import { createDefaultSettings } from '../../src/shared/config';
 
 describe('initializeContentTranslation', () => {
@@ -9,7 +13,7 @@ describe('initializeContentTranslation', () => {
     vi.useRealTimers();
   });
 
-  it('auto-translates after the page is loaded without mounting the floating ball', async () => {
+  it('auto-translates after the page is loaded while keeping the floating ball available', async () => {
     vi.useFakeTimers();
     const loadSettings = vi.fn().mockResolvedValue({
       ...createDefaultSettings(),
@@ -33,7 +37,7 @@ describe('initializeContentTranslation', () => {
       sendRuntimeMessage,
     });
 
-    expect(document.querySelector('[data-floating-ball-trigger]')).toBeNull();
+    expect(document.querySelector('[data-floating-ball-trigger]')).not.toBeNull();
     expect(sendRuntimeMessage).not.toHaveBeenCalled();
 
     document.body.innerHTML = '<article><p>Hello world</p></article>';
@@ -75,7 +79,7 @@ describe('initializeContentTranslation', () => {
     await Promise.resolve();
     await vi.runAllTimersAsync();
 
-    expect(document.querySelector('[data-floating-ball-trigger]')).toBeNull();
+    expect(document.querySelector('[data-floating-ball-trigger]')).not.toBeNull();
     expect(sendRuntimeMessage).not.toHaveBeenCalled();
 
     document.querySelector('main')?.insertAdjacentHTML('beforeend', '<p>Dynamic content</p>');
@@ -138,5 +142,11 @@ describe('initializeContentTranslation', () => {
     expect(collectPageSegments(document.body)).toEqual([
       { id: 'seg-0', text: 'Translate the article.' },
     ]);
+  });
+
+  it('ignores malformed runtime messages before reading their type', () => {
+    expect(getIncomingMessageType(null)).toBeNull();
+    expect(getIncomingMessageType({})).toBeNull();
+    expect(getIncomingMessageType({ type: 'SET_DISPLAY_MODE' })).toBe('SET_DISPLAY_MODE');
   });
 });

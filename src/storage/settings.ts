@@ -36,6 +36,10 @@ function normalizeSettings(
     normalizedSettings.providers.deepseek.model = defaults.providers.deepseek.model;
   }
 
+  if (!normalizedSettings.providers.deepseek.apiKey && defaults.providers.deepseek.apiKey) {
+    normalizedSettings.providers.deepseek.apiKey = defaults.providers.deepseek.apiKey;
+  }
+
   return normalizedSettings;
 }
 

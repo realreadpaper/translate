@@ -73,28 +73,12 @@ body {
   font-weight: 700;
 }
 
-.popup-primary-button,
 .popup-segmented-control button,
 .popup-secondary-link {
   border: 0;
   border-radius: 16px;
   font: inherit;
   cursor: pointer;
-}
-
-.popup-primary-button {
-  width: 100%;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, #0f766e 0%, #155e75 100%);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 700;
-  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.24);
-}
-
-.popup-primary-button:disabled {
-  cursor: wait;
-  opacity: 0.72;
 }
 
 .popup-section,

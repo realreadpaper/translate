@@ -16,10 +16,12 @@
 - Reddit 帖子和评论正文翻译
 - DeepSeek 默认配置与本地密钥注入
 - Provider 返回结构容错，避免异常响应打断整页翻译
+- 独立 PDF 文本层翻译工作台（实验）
+- YouTube 现有字幕轨道翻译 overlay（实验）
 - 离线稳定 E2E 测试
 - 可选真实 DeepSeek 联机冒烟测试
 
-说明：项目中已经预留 `html-page`、`youtube-subtitles`、`pdf-document` 翻译目标模型，但当前稳定可用能力聚焦 `html-page` 网页翻译。悬浮球暂时只触发网页翻译，不触发 PDF 或 YouTube 逻辑。
+说明：当前稳定能力仍以 `html-page` 网页翻译为主；PDF 与 YouTube 字幕翻译已经接入首版实验链路。PDF 仅支持可提取文本层的文档，扫描版 PDF 的 OCR 兜底尚未接入。YouTube 仅支持已有字幕轨道的视频，无字幕视频的 ASR 兜底尚未接入。
 
 ## 技术栈
 
@@ -46,6 +48,7 @@ npm run build
 - `src/background/`：background service worker、消息编排、provider 调用
 - `src/popup/`：popup 操作面板
 - `src/options/`：设置页
+- `src/pdf/`：PDF 翻译工作台
 - `src/shared/`：共享类型、消息协议、默认配置
 - `tests/`：单元测试、组件测试和 E2E 测试
 

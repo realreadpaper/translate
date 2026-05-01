@@ -150,4 +150,104 @@ describe('translatePageSegments', () => {
       ],
     });
   });
+
+  it('retries malformed translation payloads once before marking the batch failed', async () => {
+    let attempts = 0;
+
+    const result = await translatePageSegments(
+      [
+        { id: 'seg-0', text: 'first' },
+        { id: 'seg-1', text: 'second' },
+      ],
+      {
+        providerId: 'deepseek',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
+        providerSettings: {
+          apiKey: 'test-key',
+          baseUrl: 'https://api.deepseek.com/v1',
+          model: 'deepseek-v4-flash',
+        },
+      },
+      async ({ segments }) => {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            ok: false,
+            message:
+              'DeepSeek 返回了格式不正确的翻译结果：Provider returned malformed translated segments.',
+          };
+        }
+
+        return {
+          ok: true,
+          segments: segments.map((segment) => ({
+            id: segment.id,
+            translatedText: `${segment.text}-zh`,
+          })),
+        };
+      },
+      2,
+    );
+
+    expect(attempts).toBe(2);
+    expect(result).toEqual({
+      status: 'success',
+      translated: [
+        { id: 'seg-0', translatedText: 'first-zh' },
+        { id: 'seg-1', translatedText: 'second-zh' },
+      ],
+      failedBatches: [],
+    });
+  });
+
+  it('retries unparseable json translation payloads once before marking the batch failed', async () => {
+    let attempts = 0;
+
+    const result = await translatePageSegments(
+      [
+        { id: 'seg-0', text: 'first' },
+        { id: 'seg-1', text: 'second' },
+      ],
+      {
+        providerId: 'deepseek',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
+        providerSettings: {
+          apiKey: 'test-key',
+          baseUrl: 'https://api.deepseek.com/v1',
+          model: 'deepseek-v4-flash',
+        },
+      },
+      async ({ segments }) => {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            ok: false,
+            message:
+              'DeepSeek 返回了无法解析的翻译结果：Unexpected token \'我\', ..."atedText":我们从四个维度评估B"... is not valid JSON',
+          };
+        }
+
+        return {
+          ok: true,
+          segments: segments.map((segment) => ({
+            id: segment.id,
+            translatedText: `${segment.text}-zh`,
+          })),
+        };
+      },
+      2,
+    );
+
+    expect(attempts).toBe(2);
+    expect(result).toEqual({
+      status: 'success',
+      translated: [
+        { id: 'seg-0', translatedText: 'first-zh' },
+        { id: 'seg-1', translatedText: 'second-zh' },
+      ],
+      failedBatches: [],
+    });
+  });
 });

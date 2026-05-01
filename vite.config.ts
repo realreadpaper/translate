@@ -6,4 +6,13 @@ import { manifest } from './src/manifest';
 
 export default defineConfig({
   plugins: [react(), crx({ manifest })],
+  build: {
+    rollupOptions: {
+      input: {
+        popup: 'src/popup/index.html',
+        options: 'src/options/index.html',
+        pdf: 'src/pdf/index.html',
+      },
+    },
+  },
 });

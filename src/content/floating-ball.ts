@@ -2,13 +2,18 @@ import type {
   PageTranslationFailedMessage,
   PageTranslationFinishedMessage,
   StartPageTranslationMessage,
+  StartTranslationJobMessage,
+  TranslationJobRedirectedMessage,
 } from '../shared/messages';
 import { logDebug } from '../shared/debug';
 import { cleanAds } from './ad-cleaner';
 import { containsTranslatableText, extractSegments } from './dom-extractor';
 
-type RuntimeMessage = StartPageTranslationMessage;
-type TranslationResponse = PageTranslationFinishedMessage | PageTranslationFailedMessage;
+type RuntimeMessage = StartPageTranslationMessage | StartTranslationJobMessage;
+type TranslationResponse =
+  | PageTranslationFinishedMessage
+  | PageTranslationFailedMessage
+  | TranslationJobRedirectedMessage;
 type SourceSegment = { id: string; text: string };
 
 type FloatingBallDependencies = {
@@ -111,20 +116,18 @@ export function mountFloatingBall(
       return;
     }
 
-    const message: StartPageTranslationMessage =
-      segments.length > 0
-        ? {
-            type: 'START_PAGE_TRANSLATION',
-            segments,
-          }
-        : {
-            type: 'START_PAGE_TRANSLATION',
-          };
+    const message: StartPageTranslationMessage | StartTranslationJobMessage = createStartMessage(
+      segments,
+    );
 
-    segments.forEach((segment) => {
-      pendingSegmentFingerprints.set(segment.id, createSegmentFingerprint(segment));
-    });
-    logDebug('floating ball starting html-page translation', {
+    if (message.type === 'START_PAGE_TRANSLATION') {
+      segments.forEach((segment) => {
+        pendingSegmentFingerprints.set(segment.id, createSegmentFingerprint(segment));
+      });
+    }
+    logDebug('floating ball start message prepared', {
+      messageType: message.type,
+      targetKind: message.type === 'START_TRANSLATION_JOB' ? message.targetKind : 'html-page',
       segmentCount: segments.length,
     });
     isTranslating = true;
@@ -136,10 +139,19 @@ export function mountFloatingBall(
       logDebug('floating ball received translation response', {
         responseType: response.type,
         status: response.type === 'PAGE_TRANSLATION_FINISHED' ? response.status : undefined,
+        translatedCount:
+          response.type === 'PAGE_TRANSLATION_FINISHED' ? response.translated.length : undefined,
       });
 
       if (response.type === 'PAGE_TRANSLATION_FAILED') {
         throw new Error(response.message);
+      }
+
+      if (response.type === 'TRANSLATION_JOB_REDIRECTED') {
+        translated = true;
+        pendingSegmentFingerprints.clear();
+        setTriggerState('translated', `已打开 PDF 翻译工作台：${response.target.displayName}`);
+        return;
       }
 
       translated = true;
@@ -259,6 +271,56 @@ export function mountFloatingBall(
     },
     startTranslation,
   };
+}
+
+function createStartMessage(segments: SourceSegment[]): StartPageTranslationMessage | StartTranslationJobMessage {
+  if (isYoutubeWatchPage()) {
+    logDebug('floating ball route selected', { targetKind: 'youtube-subtitles' });
+    return {
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'youtube-subtitles',
+    };
+  }
+
+  if (isPdfPage()) {
+    logDebug('floating ball route selected', { targetKind: 'pdf-document' });
+    return {
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'pdf-document',
+    };
+  }
+
+  logDebug('floating ball route selected', {
+    targetKind: 'html-page',
+    segmentCount: segments.length,
+  });
+  if (segments.length > 0) {
+    return {
+      type: 'START_PAGE_TRANSLATION',
+      segments,
+    };
+  }
+
+  return {
+    type: 'START_PAGE_TRANSLATION',
+  };
+}
+
+function isYoutubeWatchPage(): boolean {
+  return (
+    (window.location.hostname === 'www.youtube.com' || window.location.hostname === 'youtube.com') &&
+    window.location.pathname === '/watch'
+  );
+}
+
+function isPdfPage(): boolean {
+  const { href, pathname, search } = window.location;
+  if (/\.pdf(?:$|[?#])/i.test(href) || pathname.startsWith('/pdf/')) {
+    return true;
+  }
+
+  const sourceUrl = new URLSearchParams(search).get('src') ?? '';
+  return /\.pdf(?:$|[?#])/i.test(sourceUrl);
 }
 
 function createSegmentFingerprint(segment: SourceSegment): string {
