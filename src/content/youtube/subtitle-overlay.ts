@@ -1,5 +1,10 @@
 import type { DisplayMode } from '../../shared/types';
 import type { SubtitleDisplayStyle } from '../../shared/types';
+import type { StartTranslationJobMessage } from '../../shared/messages';
+import {
+  createSourceTextCacheKey,
+  createYoutubePrefetchBatches,
+} from './prefetch-queue';
 
 export type YoutubeSubtitleCue = {
   id: string;
@@ -10,17 +15,20 @@ export type YoutubeSubtitleCue = {
 
 const OVERLAY_STYLE_ID = 'immersive-ai-translate-youtube-subtitle-style';
 let cachedCues: YoutubeSubtitleCue[] = [];
+let translatedTextBySourceText = new Map<string, string>();
 let overlayController: {
   displayMode: DisplayMode;
   displayStyle: SubtitleDisplayStyle;
   overlay: HTMLElement;
   translatedById: Map<string, string>;
+  pendingTrackCueIds: Set<string>;
   video: HTMLVideoElement | null;
   renderActiveCue: () => void;
 } | null = null;
 
 export function cacheYoutubeSubtitleCues(cues: YoutubeSubtitleCue[]) {
   cachedCues = cues;
+  translatedTextBySourceText = new Map();
   overlayController?.renderActiveCue();
 }
 
@@ -28,10 +36,14 @@ export function renderYoutubeSubtitleOverlay(
   translated: Array<{ id: string; translatedText: string }>,
   displayMode: DisplayMode,
   displayStyle: SubtitleDisplayStyle = 'overlay-bottom',
+  options: {
+    sendRuntimeMessage?: (message: StartTranslationJobMessage) => Promise<unknown>;
+  } = {},
 ) {
   ensureOverlayStyles();
 
   const translatedById = new Map(translated.map((item) => [item.id, item.translatedText]));
+  rememberTranslatedCueText(translated);
   const host = findPlayerContainer();
   let overlay = host.querySelector('[data-youtube-subtitle-overlay]') as HTMLElement | null;
   if (!overlay) {
@@ -44,8 +56,12 @@ export function renderYoutubeSubtitleOverlay(
   if (overlayController && overlayController.overlay === overlay) {
     overlayController.displayMode = displayMode;
     overlayController.displayStyle = displayStyle;
-    overlayController.translatedById = translatedById;
+    translatedById.forEach((translatedText, id) => {
+      overlayController?.translatedById.set(id, translatedText);
+      overlayController?.pendingTrackCueIds.delete(id);
+    });
     overlayController.renderActiveCue();
+    requestTrackPrefetchTranslation(overlayController, options.sendRuntimeMessage);
     return;
   }
 
@@ -54,6 +70,7 @@ export function renderYoutubeSubtitleOverlay(
     displayStyle,
     overlay,
     translatedById,
+    pendingTrackCueIds: new Set<string>(),
     video,
     renderActiveCue() {
       if (!controller.video) {
@@ -81,6 +98,7 @@ export function renderYoutubeSubtitleOverlay(
   controller.renderActiveCue();
   video?.addEventListener('timeupdate', controller.renderActiveCue);
   video?.addEventListener('seeked', controller.renderActiveCue);
+  requestTrackPrefetchTranslation(controller, options.sendRuntimeMessage);
 }
 
 export function updateYoutubeSubtitleOverlayDisplayMode(displayMode: DisplayMode) {
@@ -123,6 +141,80 @@ function findPlayerContainer(): HTMLElement {
     (document.querySelector('.html5-video-player') as HTMLElement | null) ??
     document.body
   );
+}
+
+function requestTrackPrefetchTranslation(
+  controller: NonNullable<typeof overlayController>,
+  sendRuntimeMessage?: (message: StartTranslationJobMessage) => Promise<unknown>,
+) {
+  if (!sendRuntimeMessage || !controller.video) {
+    return;
+  }
+
+  const nowMs = Math.max(0, Math.round(controller.video.currentTime * 1000));
+  const batches = createYoutubePrefetchBatches({
+    cues: cachedCues,
+    nowMs,
+    translatedIds: new Set(controller.translatedById.keys()),
+    pendingIds: controller.pendingTrackCueIds,
+    translatedTextBySourceText,
+  });
+
+  batches.forEach((batch) => {
+    batch.segments.forEach((segment) => controller.pendingTrackCueIds.add(segment.id));
+    void sendRuntimeMessage({
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'youtube-subtitles',
+      segments: batch.segments,
+    })
+      .then((response) => {
+        applyImmediateTranslationResponse(response);
+      })
+      .finally(() => {
+        batch.segments.forEach((segment) => controller.pendingTrackCueIds.delete(segment.id));
+      });
+  });
+}
+
+function applyImmediateTranslationResponse(response: unknown) {
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('type' in response) ||
+    response.type !== 'PAGE_TRANSLATION_FINISHED' ||
+    !('translated' in response) ||
+    !Array.isArray(response.translated)
+  ) {
+    return;
+  }
+
+  const translated: Array<{ id: string; translatedText: string }> = [];
+  response.translated.forEach((item) => {
+    if (
+      item &&
+      typeof item === 'object' &&
+      'id' in item &&
+      'translatedText' in item &&
+      typeof item.id === 'string' &&
+      typeof item.translatedText === 'string'
+    ) {
+      overlayController?.translatedById.set(item.id, item.translatedText);
+      translated.push({ id: item.id, translatedText: item.translatedText });
+    }
+  });
+  rememberTranslatedCueText(translated);
+  overlayController?.renderActiveCue();
+}
+
+function rememberTranslatedCueText(translated: Array<{ id: string; translatedText: string }>) {
+  translated.forEach((item) => {
+    const cue = cachedCues.find((candidate) => candidate.id === item.id);
+    if (!cue || !item.translatedText) {
+      return;
+    }
+
+    translatedTextBySourceText.set(createSourceTextCacheKey(cue.text), item.translatedText);
+  });
 }
 
 function ensureOverlayStyles() {

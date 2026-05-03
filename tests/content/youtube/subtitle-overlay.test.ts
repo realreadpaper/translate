@@ -72,4 +72,46 @@ describe('renderYoutubeSubtitleOverlay', () => {
       '您好',
     );
   });
+
+  it('queues untranslated full-track cues for background prefetch translation', () => {
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      value: 1.2,
+    });
+    cacheYoutubeSubtitleCues([
+      { id: 'cue-0', text: 'Hello', startMs: 1000, endMs: 3000 },
+      { id: 'cue-1', text: 'Soon', startMs: 20_000, endMs: 22_000 },
+      { id: 'cue-2', text: 'Window', startMs: 120_000, endMs: 122_000 },
+      { id: 'cue-3', text: 'Later', startMs: 600_000, endMs: 602_000 },
+    ]);
+    const sendRuntimeMessage = vi.fn().mockResolvedValue({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: [],
+      failedBatches: [],
+    });
+
+    renderYoutubeSubtitleOverlay([], 'bilingual', 'overlay-bottom', { sendRuntimeMessage });
+
+    expect(sendRuntimeMessage).toHaveBeenCalledTimes(3);
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(1, {
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'youtube-subtitles',
+      segments: [
+        { id: 'cue-0', text: 'Hello' },
+        { id: 'cue-1', text: 'Soon' },
+      ],
+    });
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'youtube-subtitles',
+      segments: [{ id: 'cue-2', text: 'Window' }],
+    });
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(3, {
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'youtube-subtitles',
+      segments: [{ id: 'cue-3', text: 'Later' }],
+    });
+  });
 });
