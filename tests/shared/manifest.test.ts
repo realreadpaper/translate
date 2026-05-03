@@ -16,6 +16,9 @@ describe('manifest', () => {
     expect(manifest.permissions).toEqual(
       expect.arrayContaining(['tabs', 'contextMenus']),
     );
+    expect(manifest.permissions).toEqual(
+      expect.arrayContaining(['tabCapture', 'offscreen']),
+    );
     expect(manifest.permissions).not.toEqual(
       expect.arrayContaining(['webNavigation', 'webRequest', 'declarativeNetRequest']),
     );
@@ -26,6 +29,9 @@ describe('manifest', () => {
           resources: expect.arrayContaining(['src/pdf/index.html']),
         }),
       ]),
+    );
+    expect(JSON.stringify(manifest.web_accessible_resources)).toContain(
+      'src/offscreen/audio-capture.html',
     );
   });
 });

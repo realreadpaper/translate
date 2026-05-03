@@ -21,6 +21,8 @@ export const manifest: StaticManifest = {
     'scripting',
     'tabs',
     'contextMenus',
+    'tabCapture',
+    'offscreen',
   ],
   host_permissions: ['<all_urls>'],
   content_scripts: [
@@ -33,7 +35,7 @@ export const manifest: StaticManifest = {
   web_accessible_resources: [
     {
       matches: ['<all_urls>'],
-      resources: ['src/pdf/index.html'],
+      resources: ['src/pdf/index.html', 'src/offscreen/audio-capture.html'],
     },
   ],
 };

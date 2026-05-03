@@ -96,4 +96,25 @@ describe('settings storage', () => {
 
     await expect(loadSettings()).resolves.toEqual(createDefaultSettings());
   });
+
+  it('migrates saved settings that do not have youtube prefetch and asr provider settings yet', async () => {
+    const legacySettings = createDefaultSettings() as Partial<ReturnType<typeof createDefaultSettings>>;
+    delete legacySettings.youtubeSubtitlePrefetchEnabled;
+    delete legacySettings.youtubeSubtitlePrefetchWindowSeconds;
+    delete legacySettings.youtubeExperimentalAudioPrefetchEnabled;
+    delete legacySettings.youtubeAsrProvider;
+    store.set('immersive-ai-translate.settings', legacySettings);
+
+    const settings = await loadSettings();
+
+    expect(settings.youtubeSubtitlePrefetchEnabled).toBe(true);
+    expect(settings.youtubeSubtitlePrefetchWindowSeconds).toBe(180);
+    expect(settings.youtubeExperimentalAudioPrefetchEnabled).toBe(false);
+    expect(settings.youtubeAsrProvider).toEqual({
+      providerId: 'openai-compatible',
+      apiKey: '',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'whisper-1',
+    });
+  });
 });
