@@ -416,6 +416,80 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                 </select>
               </label>
 
+              <div className="field options-toggle-field">
+                <span>实验性 YouTube 音频预抓</span>
+                <label className="options-switch" htmlFor="youtube-audio-prefetch">
+                  <input
+                    id="youtube-audio-prefetch"
+                    aria-label="实验性 YouTube 音频预抓"
+                    type="checkbox"
+                    checked={settings.youtubeExperimentalAudioPrefetchEnabled}
+                    onChange={(event) =>
+                      persistSettings({
+                        ...settings,
+                        youtubeExperimentalAudioPrefetchEnabled: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">无字幕时尝试抓取音频片段并交给 ASR。</span>
+                </label>
+              </div>
+
+              <label className="field">
+                <span>YouTube ASR Base URL</span>
+                <input
+                  aria-label="YouTube ASR Base URL"
+                  value={settings.youtubeAsrProvider.baseUrl}
+                  onChange={(event) =>
+                    persistSettings({
+                      ...settings,
+                      youtubeAsrProvider: {
+                        ...settings.youtubeAsrProvider,
+                        baseUrl: event.target.value,
+                      },
+                    })
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span>YouTube ASR API Key</span>
+                <input
+                  aria-label="YouTube ASR API Key"
+                  type="password"
+                  value={settings.youtubeAsrProvider.apiKey}
+                  onChange={(event) =>
+                    persistSettings({
+                      ...settings,
+                      youtubeAsrProvider: {
+                        ...settings.youtubeAsrProvider,
+                        apiKey: event.target.value,
+                      },
+                    })
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span>YouTube ASR 模型</span>
+                <input
+                  aria-label="YouTube ASR 模型"
+                  value={settings.youtubeAsrProvider.model}
+                  onChange={(event) =>
+                    persistSettings({
+                      ...settings,
+                      youtubeAsrProvider: {
+                        ...settings.youtubeAsrProvider,
+                        model: event.target.value,
+                      },
+                    })
+                  }
+                />
+              </label>
+
               <label className="field">
                 <span>字幕显示位置</span>
                 <select
