@@ -29,6 +29,7 @@ type TranslateContext = {
   sourceLanguage: string;
   targetLanguage: string;
   providerSettings: ExtensionSettings['providers'][ExtensionSettings['providerId']];
+  contentKind?: 'html-page' | 'youtube-subtitles';
 };
 
 type SendMessageToTab = {
@@ -53,6 +54,10 @@ type MessageHandlerDependencies = {
     target: TranslationTarget,
     settings: ExtensionSettings,
   ) => Promise<number>;
+  startYoutubeAudioAsr?: (
+    target: Extract<TranslationTarget, { kind: 'youtube-subtitles' }>,
+    settings: ExtensionSettings['youtubeAsrProvider'],
+  ) => Promise<SourceSegment[]>;
   debugLog?: (message: string, details?: Record<string, unknown>) => void;
 };
 
@@ -87,6 +92,7 @@ export function createMessageHandler({
   loadSettings,
   detectTarget,
   openPdfWorkspace,
+  startYoutubeAudioAsr,
   debugLog = () => undefined,
 }: MessageHandlerDependencies) {
   return async function handleMessage(
@@ -149,11 +155,16 @@ export function createMessageHandler({
         tabId: target.tabId,
         videoId: target.videoId,
       });
-      const collectedSegments: unknown = await sendMessageToTab(message.tabId, {
-        type: 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS',
-        target,
-        preferredLanguage: settings.sourceLanguage,
-      });
+      const callerProvidedSegments = isStartTranslationJobMessage(message)
+        ? message.segments
+        : undefined;
+      const collectedSegments: unknown =
+        callerProvidedSegments ??
+        (await sendMessageToTab(message.tabId, {
+          type: 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS',
+          target,
+          preferredLanguage: settings.sourceLanguage,
+        }));
       if (!Array.isArray(collectedSegments)) {
         const message =
           typeof collectedSegments === 'object' &&
@@ -170,6 +181,16 @@ export function createMessageHandler({
         segmentCount: segments.length,
       });
       if (segments.length === 0) {
+        if (
+          settings.youtubeExperimentalAudioPrefetchEnabled &&
+          startYoutubeAudioAsr
+        ) {
+          const audioSegments = await startYoutubeAudioAsr(target, settings.youtubeAsrProvider);
+          segments.push(...audioSegments);
+        }
+      }
+
+      if (segments.length === 0) {
         if (settings.youtubeAsrFallback === 'disabled') {
           throw new Error('当前视频没有可用字幕轨道，ASR 兜底已在设置中关闭。');
         }
@@ -181,6 +202,7 @@ export function createMessageHandler({
         sourceLanguage: settings.sourceLanguage,
         targetLanguage: settings.targetLanguage,
         providerSettings: settings.providers[settings.providerId],
+        contentKind: 'youtube-subtitles',
       });
 
       await sendMessageToTab(message.tabId, {
