@@ -4,6 +4,8 @@
 
 详细架构、功能说明、数据流和测试策略见：[项目说明文档](docs/project-overview.md)。
 
+YouTube 无字幕视频的 ASR 配置见：[YouTube ASR 配置教程](docs/youtube-asr-setup.md)。
+
 ## 当前能力
 
 - 通用可见文本提取与批量翻译
