@@ -14,6 +14,10 @@ type YoutubePlayerResponse = {
   };
 };
 
+const FULL_TRACK_INITIAL_LOOKAHEAD_MS = 180_000;
+const FULL_TRACK_INITIAL_MAX_CUES = 80;
+const FULL_TRACK_INITIAL_CUE_GRACE_MS = 500;
+
 export async function collectYoutubeSubtitleSegments(
   preferredLanguage = 'auto',
 ): Promise<Array<{ id: string; text: string }>> {
@@ -41,7 +45,31 @@ export async function collectYoutubeSubtitleSegments(
   }
 
   cacheYoutubeSubtitleCues(cues);
-  return cues.map(({ id, text }) => ({ id, text }));
+  return selectInitialTrackCues(cues).map(({ id, text }) => ({ id, text }));
+}
+
+function selectInitialTrackCues(cues: YoutubeSubtitleCue[]): YoutubeSubtitleCue[] {
+  const video = document.querySelector('video');
+  if (!video) {
+    return cues.slice(0, FULL_TRACK_INITIAL_MAX_CUES);
+  }
+
+  const nowMs = Math.max(0, Math.round(video.currentTime * 1000));
+  const lookaheadEndMs = nowMs + FULL_TRACK_INITIAL_LOOKAHEAD_MS;
+  const windowCues = cues.filter(
+    (cue) =>
+      cue.endMs >= nowMs - FULL_TRACK_INITIAL_CUE_GRACE_MS &&
+      cue.startMs <= lookaheadEndMs,
+  );
+  if (windowCues.length > 0) {
+    return windowCues.slice(0, FULL_TRACK_INITIAL_MAX_CUES);
+  }
+
+  const firstWindowIndex = cues.findIndex(
+    (cue) => cue.endMs >= nowMs - FULL_TRACK_INITIAL_CUE_GRACE_MS,
+  );
+  const startIndex = firstWindowIndex === -1 ? 0 : firstWindowIndex;
+  return cues.slice(startIndex, startIndex + FULL_TRACK_INITIAL_MAX_CUES);
 }
 
 function findCaptionTrackUrl(preferredLanguage: string): string {

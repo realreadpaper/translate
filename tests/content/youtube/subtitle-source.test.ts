@@ -5,6 +5,7 @@ import { collectYoutubeSubtitleSegments } from '../../../src/content/youtube/sub
 describe('collectYoutubeSubtitleSegments', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    delete (window as unknown as { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse;
     vi.restoreAllMocks();
   });
 
@@ -116,6 +117,45 @@ describe('collectYoutubeSubtitleSegments', () => {
 
     await expect(collectYoutubeSubtitleSegments()).resolves.toEqual([
       { id: 'cue-0', text: 'Hello world' },
+    ]);
+  });
+
+  it('returns a prefetch window of timedtext cues after the current playback position', async () => {
+    document.body.innerHTML = '<video></video>';
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      value: 60,
+    });
+    Object.assign(window, {
+      ytInitialPlayerResponse: {
+        captions: {
+          playerCaptionsTracklistRenderer: {
+            captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext?v=demo&lang=en' }],
+          },
+        },
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => `
+          <transcript>
+            <text start="10" dur="2">Old line</text>
+            <text start="61" dur="2">Current line</text>
+            <text start="120" dur="2">Two minutes</text>
+            <text start="239" dur="2">Three minutes</text>
+            <text start="400" dur="2">Too far</text>
+          </transcript>
+        `,
+      }),
+    );
+
+    await expect(collectYoutubeSubtitleSegments('auto')).resolves.toEqual([
+      { id: 'cue-1', text: 'Current line' },
+      { id: 'cue-2', text: 'Two minutes' },
+      { id: 'cue-3', text: 'Three minutes' },
     ]);
   });
 
