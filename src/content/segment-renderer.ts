@@ -25,6 +25,7 @@ export function applyTranslations(
     const translated = existingAdjacent ?? existingAnywhere ?? document.createElement('div');
     translated.dataset.translationFor = segment.id;
     translated.dataset.immersiveIgnore = 'true';
+    translated.dataset.sourceText = normalizeRenderedText(original.textContent ?? '');
     translated.classList.add('immersive-ai-translation');
     translated.style.marginTop = '6px';
     translated.style.marginBottom = '10px';
@@ -35,6 +36,10 @@ export function applyTranslations(
       original.insertAdjacentElement('afterend', translated);
     }
   });
+}
+
+function normalizeRenderedText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 function syncRedditSlot(original: Element, translated: HTMLElement) {

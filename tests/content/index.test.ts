@@ -91,6 +91,88 @@ describe('initializeContentTranslation', () => {
     });
   });
 
+  it('continues viewport scanning after auto-translate finishes', async () => {
+    vi.useFakeTimers();
+    const loadSettings = vi.fn().mockResolvedValue({
+      ...createDefaultSettings(),
+      autoTranslateOnLoad: true,
+    });
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        const original = document.querySelector('[data-segment-id="seg-0"]');
+        original?.insertAdjacentHTML(
+          'afterend',
+          '<div data-translation-for="seg-0" data-immersive-ignore="true">初始内容</div>',
+        );
+        return {
+          type: 'PAGE_TRANSLATION_FINISHED',
+          status: 'success',
+          translated: [{ id: 'seg-0', translatedText: '初始内容' }],
+          failedBatches: [],
+        };
+      })
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-1', translatedText: '后续内容' }],
+        failedBatches: [],
+      });
+    Object.defineProperty(document, 'readyState', {
+      configurable: true,
+      value: 'complete',
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    document.body.innerHTML = '<main><p>Initial content</p></main>';
+    const initial = document.querySelector('p') as HTMLElement;
+    initial.getBoundingClientRect = vi.fn(() => ({
+      top: 100,
+      bottom: 140,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 100,
+      toJSON: () => undefined,
+    }));
+
+    await initializeContentTranslation(document.body, {
+      loadSettings,
+      sendRuntimeMessage,
+    });
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    const later = document.createElement('p');
+    later.textContent = 'Later content';
+    later.getBoundingClientRect = vi.fn(() => ({
+      top: 180,
+      bottom: 220,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 180,
+      toJSON: () => undefined,
+    }));
+    document.querySelector('main')?.append(later);
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(1, {
+      type: 'START_PAGE_TRANSLATION',
+    });
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-1', text: 'Later content' }],
+    });
+  });
+
   it('mounts the floating ball when auto-translate is disabled', async () => {
     const loadSettings = vi.fn().mockResolvedValue({
       ...createDefaultSettings(),

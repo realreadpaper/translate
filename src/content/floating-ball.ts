@@ -23,11 +23,12 @@ type FloatingBallDependencies = {
 type FloatingBallController = {
   markTranslated: () => void;
   startTranslation: () => Promise<void>;
+  enableIncrementalTranslation: () => void;
 };
 
 const FLOATING_BALL_STYLE_ID = 'immersive-ai-translate-floating-ball-style';
 const VIEWPORT_PRELOAD_PX = 120;
-const VIEWPORT_SEGMENT_LIMIT = 6;
+const VIEWPORT_SEGMENT_LIMIT = 12;
 const SCROLL_DEBOUNCE_MS = 120;
 const IGNORED_MUTATION_SELECTOR =
   '[data-floating-ball="true"], [data-translation-for], [data-immersive-ignore="true"]';
@@ -92,6 +93,18 @@ export function mountFloatingBall(
         return false;
       }
 
+      const existingTranslation = root.querySelector(
+        `[data-translation-for="${segment.id}"]`,
+      ) as HTMLElement | null;
+      if (
+        existingTranslation &&
+        (!existingTranslation.dataset.sourceText ||
+          existingTranslation.dataset.sourceText === fingerprint)
+      ) {
+        completedSegmentFingerprints.set(segment.id, fingerprint);
+        return false;
+      }
+
       const rect = element.getBoundingClientRect();
       return rect.bottom >= 0 && rect.top <= window.innerHeight + VIEWPORT_PRELOAD_PX;
     });
@@ -100,6 +113,7 @@ export function mountFloatingBall(
   }
 
   async function startTranslation(segments = collectNextViewportSegments()) {
+    let shouldContinueViewportScan = false;
     if (!host.isConnected) {
       return;
     }
@@ -168,6 +182,7 @@ export function mountFloatingBall(
       } else {
         setTriggerState('translated', `已完成 ${response.translated.length} 段翻译`);
       }
+      shouldContinueViewportScan = message.type === 'START_PAGE_TRANSLATION';
     } catch (error) {
       translated = false;
       segments.forEach((segment) => pendingSegmentFingerprints.delete(segment.id));
@@ -189,6 +204,13 @@ export function mountFloatingBall(
       ) {
         needsViewportRescanAfterCurrent = false;
         logDebug('floating ball retrying queued viewport scan');
+        scheduleViewportTranslation();
+      } else if (
+        shouldContinueViewportScan &&
+        viewportModeStarted &&
+        host.isConnected &&
+        shouldUseViewportIncrementalTranslation()
+      ) {
         scheduleViewportTranslation();
       }
     }
@@ -255,7 +277,17 @@ export function mountFloatingBall(
     void startTranslation();
   });
   window.addEventListener('scroll', scheduleViewportTranslation, { passive: true });
+  window.addEventListener('focus', scheduleViewportTranslation);
+  window.addEventListener('resize', scheduleViewportTranslation);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      scheduleViewportTranslation();
+    }
+  });
+  root.addEventListener('focusin', scheduleViewportTranslation);
   contentObserver.observe(root, {
+    attributes: true,
+    attributeFilter: ['aria-hidden', 'class', 'data-testid', 'dir', 'hidden', 'lang', 'style'],
     childList: true,
     subtree: true,
     characterData: true,
@@ -269,6 +301,10 @@ export function mountFloatingBall(
       setTriggerState('translated', translated ? '当前页面已翻译' : '翻译当前页面');
     },
     startTranslation,
+    enableIncrementalTranslation() {
+      viewportModeStarted = true;
+      scheduleViewportTranslation();
+    },
   };
 }
 
@@ -337,6 +373,10 @@ function hasMeaningfulContentMutation(mutations: MutationRecord[], root: HTMLEle
     }
 
     if (mutation.type === 'characterData') {
+      return isTranslatableMutationNode(mutation.target, root);
+    }
+
+    if (mutation.type === 'attributes') {
       return isTranslatableMutationNode(mutation.target, root);
     }
 

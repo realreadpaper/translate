@@ -36,6 +36,7 @@ type IncomingMessage =
 
 type ContentController = {
   markTranslated: () => void;
+  enableIncrementalTranslation: () => void;
 };
 
 type InitializeContentTranslationDependencies = {
@@ -92,7 +93,7 @@ export async function initializeContentTranslation(
 
   if (settings.autoTranslateOnLoad) {
     logDebug('content auto translate scheduling enabled');
-    startAutoTranslationWhenReady(root, sendRuntimeMessage);
+    startAutoTranslationWhenReady(root, sendRuntimeMessage, controller);
     return controller;
   }
 
@@ -108,6 +109,7 @@ export function collectPageSegments(root: HTMLElement): Array<{ id: string; text
 function startAutoTranslationWhenReady(
   root: HTMLElement,
   sendRuntimeMessage: InitializeContentTranslationDependencies['sendRuntimeMessage'],
+  controller: ContentController,
 ) {
   logDebug('auto translate wait pipeline starting', {
     readyState: document.readyState,
@@ -127,7 +129,8 @@ function startAutoTranslationWhenReady(
         logDebug('auto translate on load starting', {
           segmentCount: collectPageSegments(root).length,
         });
-        void sendRuntimeMessage({ type: 'START_PAGE_TRANSLATION' });
+        void sendRuntimeMessage({ type: 'START_PAGE_TRANSLATION' })
+          .finally(() => controller.enableIncrementalTranslation());
       }, AUTO_TRANSLATE_SETTLE_MS);
     });
 }

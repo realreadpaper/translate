@@ -189,6 +189,26 @@ describe('extractSegments', () => {
     expect(body.dataset.segmentId).toBe('seg-0');
   });
 
+  it('skips X/Twitter native translation labels while keeping the post body', () => {
+    document.body.innerHTML = `
+      <main>
+        <article data-testid="tweet">
+          <div data-testid="User-Name">Someone</div>
+          <div data-testid="translationIndicator" lang="en">
+            Translated from Chinese <span>Show original</span>
+          </div>
+          <div data-testid="tweetText" lang="zh">
+            原文正文需要进入翻译队列。
+          </div>
+        </article>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: '原文正文需要进入翻译队列。' },
+    ]);
+  });
+
   it('extracts X/Twitter long article body containers without translating post chrome', () => {
     document.body.innerHTML = `
       <main>

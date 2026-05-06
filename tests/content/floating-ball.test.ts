@@ -281,6 +281,191 @@ describe('mountFloatingBall', () => {
     });
   });
 
+  it('translates up to twelve visible segments in one viewport batch', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <article>
+        ${Array.from({ length: 13 }, (_, index) => `<p>Visible paragraph ${index + 1}</p>`).join('')}
+      </article>
+    `;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const paragraphs = Array.from(document.querySelectorAll('p')) as HTMLElement[];
+    paragraphs.forEach((paragraph, index) => {
+      paragraph.getBoundingClientRect = vi.fn(() => ({
+        top: 40 + index * 36,
+        bottom: 70 + index * 36,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 30,
+        x: 0,
+        y: 40 + index * 36,
+        toJSON: () => undefined,
+      }));
+    });
+    const sendRuntimeMessage = vi.fn().mockResolvedValue({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: Array.from({ length: 12 }, (_, index) => ({
+        id: `seg-${index}`,
+        translatedText: `可见段落 ${index + 1}`,
+      })),
+      failedBatches: [],
+    });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(1, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: Array.from({ length: 12 }, (_, index) => ({
+        id: `seg-${index}`,
+        text: `Visible paragraph ${index + 1}`,
+      })),
+    });
+  });
+
+  it('continues translating remaining visible segments after a viewport batch completes', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <article>
+        ${Array.from({ length: 13 }, (_, index) => `<p>Visible paragraph ${index + 1}</p>`).join('')}
+      </article>
+    `;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const paragraphs = Array.from(document.querySelectorAll('p')) as HTMLElement[];
+    paragraphs.forEach((paragraph, index) => {
+      paragraph.getBoundingClientRect = vi.fn(() => ({
+        top: 40 + index * 36,
+        bottom: 70 + index * 36,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 30,
+        x: 0,
+        y: 40 + index * 36,
+        toJSON: () => undefined,
+      }));
+    });
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: Array.from({ length: 12 }, (_, index) => ({
+          id: `seg-${index}`,
+          translatedText: `可见段落 ${index + 1}`,
+        })),
+        failedBatches: [],
+      })
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-12', translatedText: '可见段落 13' }],
+        failedBatches: [],
+      });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-12', text: 'Visible paragraph 13' }],
+    });
+  });
+
+  it('rescans when focus moves to untranslated content that is now visible', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <article>
+        <p tabindex="0">Visible paragraph</p>
+        <p tabindex="0">Focused paragraph</p>
+      </article>
+    `;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const paragraphs = Array.from(document.querySelectorAll('p')) as HTMLElement[];
+    paragraphs[0].getBoundingClientRect = vi.fn(() => ({
+      top: 100,
+      bottom: 140,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 100,
+      toJSON: () => undefined,
+    }));
+    paragraphs[1].getBoundingClientRect = vi.fn(() => ({
+      top: 900,
+      bottom: 940,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 900,
+      toJSON: () => undefined,
+    }));
+    const sendRuntimeMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-0', translatedText: '可见段落' }],
+        failedBatches: [],
+      })
+      .mockResolvedValueOnce({
+        type: 'PAGE_TRANSLATION_FINISHED',
+        status: 'success',
+        translated: [{ id: 'seg-1', translatedText: '聚焦段落' }],
+        failedBatches: [],
+      });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+
+    paragraphs[1].getBoundingClientRect = vi.fn(() => ({
+      top: 180,
+      bottom: 220,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 180,
+      toJSON: () => undefined,
+    }));
+    paragraphs[1].dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenNthCalledWith(2, {
+      type: 'START_PAGE_TRANSLATION',
+      segments: [{ id: 'seg-1', text: 'Focused paragraph' }],
+    });
+  });
+
   it('cleans visible ads before selecting viewport segments', async () => {
     vi.useFakeTimers();
     document.body.innerHTML = `
