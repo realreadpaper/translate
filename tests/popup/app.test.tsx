@@ -142,4 +142,26 @@ describe('Popup App', () => {
       expect(screen.getByText('已打开护眼 PDF 翻译工作台')).toBeTruthy();
     });
   });
+
+  it('shows a readable message when the pdf workspace cannot be opened', async () => {
+    const openPdfWorkspace = vi.fn().mockRejectedValue(new Error('Active tab id is unavailable.'));
+
+    render(
+      <App
+        getActiveTabId={vi.fn().mockResolvedValue(3)}
+        sendRuntimeMessage={vi.fn().mockResolvedValue(undefined)}
+        autoTranslateOnLoad={false}
+        updateAutoTranslateOnLoad={vi.fn().mockResolvedValue(undefined)}
+        activeTabKind="pdf-document"
+        openPdfWorkspace={openPdfWorkspace}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '护眼翻译此 PDF' }));
+
+    await waitFor(() => {
+      expect(openPdfWorkspace).toHaveBeenCalled();
+      expect(screen.getByText('打开失败：Active tab id is unavailable.')).toBeTruthy();
+    });
+  });
 });

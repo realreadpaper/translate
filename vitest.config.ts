@@ -7,6 +7,7 @@ export default defineConfig({
       ['tests/content/**/*.test.ts', 'jsdom'],
       ['tests/popup/**/*.test.tsx', 'jsdom'],
       ['tests/options/**/*.test.tsx', 'jsdom'],
+      ['tests/pdf-viewer/**/*.test.tsx', 'jsdom'],
     ],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
   },

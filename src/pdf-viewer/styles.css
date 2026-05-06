@@ -1,0 +1,23 @@
+.pdf-viewer-shell {
+  padding: 24px;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.pdf-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.pdf-viewer-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.pdf-viewer-page {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
