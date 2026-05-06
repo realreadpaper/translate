@@ -11,10 +11,20 @@ const defaultSettings = {
   autoTranslateOnLoad: false,
   enableYoutubeSubtitleTranslation: true,
   enablePdfDocumentTranslation: true,
+  youtubeSubtitlePrefetchEnabled: true,
+  youtubeSubtitlePrefetchWindowSeconds: 180,
+  youtubeExperimentalAudioPrefetchEnabled: false,
+  youtubeAsrProvider: {
+    providerId: 'openai-compatible' as const,
+    apiKey: '',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'whisper-1',
+  },
   pdfOcrFallback: 'confirm-first' as const,
   youtubeAsrFallback: 'confirm-first' as const,
   subtitleDisplayStyle: 'overlay-bottom' as const,
   translationCacheEnabled: true,
+  debugLoggingEnabled: false,
   providers: {
     'openai-compatible': {
       apiKey: 'test-key',
@@ -350,6 +360,7 @@ describe('createMessageHandler', () => {
       ],
       expect.objectContaining({
         targetLanguage: 'zh-CN',
+        contentKind: 'youtube-subtitles',
       }),
     );
     expect(sendMessageToTab).toHaveBeenNthCalledWith(2, 7, {
@@ -362,5 +373,140 @@ describe('createMessageHandler', () => {
       displayMode: 'bilingual',
       subtitleDisplayStyle: 'overlay-bottom',
     });
+  });
+
+  it('translates provided youtube-subtitles segments without collecting the full track again', async () => {
+    const sendMessageToTab = vi.fn().mockResolvedValue(undefined);
+    const translatePage = vi.fn().mockResolvedValue({
+      status: 'success',
+      translated: [{ id: 'cue-2', translatedText: '下一句' }],
+      failedBatches: [],
+    });
+    const target = {
+      kind: 'youtube-subtitles',
+      tabId: 7,
+      url: 'https://www.youtube.com/watch?v=demo',
+      videoId: 'demo',
+    } satisfies TranslationTarget;
+
+    const handler = createMessageHandler({
+      sendMessageToTab,
+      translatePage,
+      loadSettings: vi.fn().mockResolvedValue(defaultSettings),
+      detectTarget: vi.fn().mockResolvedValue(target),
+      openPdfWorkspace: vi.fn(),
+    });
+
+    await expect(
+      handler({
+        type: 'START_TRANSLATION_JOB',
+        tabId: 7,
+        targetKind: 'youtube-subtitles',
+        segments: [{ id: 'cue-2', text: 'Next line' }],
+      }),
+    ).resolves.toMatchObject({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      translated: [{ id: 'cue-2', translatedText: '下一句' }],
+    });
+
+    expect(sendMessageToTab).not.toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ type: 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS' }),
+    );
+    expect(translatePage).toHaveBeenCalledWith(
+      [{ id: 'cue-2', text: 'Next line' }],
+      expect.objectContaining({ contentKind: 'youtube-subtitles' }),
+    );
+  });
+
+  it('does not start youtube audio fallback when caption-track collection succeeds', async () => {
+    const startYoutubeAudioAsr = vi.fn();
+    const sendMessageToTab = vi.fn().mockImplementation(async (_tabId: number, message: { type: string }) => {
+      if (message.type === 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS') {
+        return [{ id: 'cue-0', text: 'Hello' }];
+      }
+
+      return undefined;
+    });
+    const translatePage = vi.fn().mockResolvedValue({
+      status: 'success',
+      translated: [{ id: 'cue-0', translatedText: '你好' }],
+      failedBatches: [],
+    });
+    const target = {
+      kind: 'youtube-subtitles',
+      tabId: 7,
+      url: 'https://www.youtube.com/watch?v=demo',
+      videoId: 'demo',
+    } satisfies TranslationTarget;
+
+    const handler = createMessageHandler({
+      sendMessageToTab,
+      translatePage,
+      loadSettings: vi.fn().mockResolvedValue(defaultSettings),
+      detectTarget: vi.fn().mockResolvedValue(target),
+      openPdfWorkspace: vi.fn(),
+      startYoutubeAudioAsr,
+    });
+
+    await handler({ type: 'START_TRANSLATION_JOB', tabId: 7 });
+
+    expect(startYoutubeAudioAsr).not.toHaveBeenCalled();
+  });
+
+  it('starts youtube audio asr when caption-track collection returns no segments', async () => {
+    const sendMessageToTab = vi.fn().mockImplementation(async (_tabId: number, message: { type: string }) => {
+      if (message.type === 'COLLECT_YOUTUBE_SUBTITLE_SEGMENTS') {
+        return [];
+      }
+
+      return undefined;
+    });
+    const startYoutubeAudioAsr = vi
+      .fn()
+      .mockResolvedValue([{ id: 'asr-cue-0-0', text: 'Audio text' }]);
+    const translatePage = vi.fn().mockResolvedValue({
+      status: 'success',
+      translated: [{ id: 'asr-cue-0-0', translatedText: '音频文本' }],
+      failedBatches: [],
+    });
+    const target = {
+      kind: 'youtube-subtitles',
+      tabId: 7,
+      url: 'https://www.youtube.com/watch?v=demo',
+      videoId: 'demo',
+    } satisfies TranslationTarget;
+
+    const handler = createMessageHandler({
+      sendMessageToTab,
+      translatePage,
+      loadSettings: vi.fn().mockResolvedValue({
+        ...defaultSettings,
+        youtubeExperimentalAudioPrefetchEnabled: true,
+        youtubeAsrProvider: {
+          providerId: 'openai-compatible',
+          apiKey: 'test-key',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'whisper-1',
+        },
+      }),
+      detectTarget: vi.fn().mockResolvedValue(target),
+      openPdfWorkspace: vi.fn(),
+      startYoutubeAudioAsr,
+    });
+
+    await handler({ type: 'START_TRANSLATION_JOB', tabId: 7 });
+
+    expect(startYoutubeAudioAsr).toHaveBeenCalledWith(
+      target,
+      expect.objectContaining({
+        providerId: 'openai-compatible',
+        apiKey: 'test-key',
+      }),
+    );
+    expect(translatePage).toHaveBeenCalledWith(
+      [{ id: 'asr-cue-0-0', text: 'Audio text' }],
+      expect.objectContaining({ contentKind: 'youtube-subtitles' }),
+    );
   });
 });

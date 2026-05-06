@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { manifest } from '../../src/manifest';
@@ -16,6 +18,9 @@ describe('manifest', () => {
     expect(manifest.permissions).toEqual(
       expect.arrayContaining(['tabs', 'contextMenus']),
     );
+    expect(manifest.permissions).toEqual(
+      expect.arrayContaining(['tabCapture', 'offscreen']),
+    );
     expect(manifest.permissions).not.toEqual(
       expect.arrayContaining(['webNavigation', 'webRequest', 'declarativeNetRequest']),
     );
@@ -27,5 +32,13 @@ describe('manifest', () => {
         }),
       ]),
     );
+    expect(JSON.stringify(manifest.web_accessible_resources)).toContain(
+      'src/offscreen/audio-capture.html',
+    );
+  });
+
+  it('has concrete offscreen audio capture entry files', () => {
+    expect(existsSync(join(process.cwd(), 'src/offscreen/audio-capture.html'))).toBe(true);
+    expect(existsSync(join(process.cwd(), 'src/offscreen/audio-capture.ts'))).toBe(true);
   });
 });

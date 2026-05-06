@@ -21,6 +21,13 @@ export type TraditionalProviderSettings = {
   endpoint: 'google-translate' | 'microsoft-translator';
 };
 
+export type YoutubeAsrProviderSettings = {
+  providerId: 'openai-compatible';
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+};
+
 export type ProviderSettingsById = {
   'openai-compatible': OpenAICompatibleProviderSettings;
   deepseek: DeepSeekProviderSettings;
@@ -35,6 +42,10 @@ export type ExtensionSettings = {
   autoTranslateOnLoad: boolean;
   enableYoutubeSubtitleTranslation: boolean;
   enablePdfDocumentTranslation: boolean;
+  youtubeSubtitlePrefetchEnabled: boolean;
+  youtubeSubtitlePrefetchWindowSeconds: number;
+  youtubeExperimentalAudioPrefetchEnabled: boolean;
+  youtubeAsrProvider: YoutubeAsrProviderSettings;
   pdfOcrFallback: FallbackMode;
   youtubeAsrFallback: FallbackMode;
   subtitleDisplayStyle: SubtitleDisplayStyle;

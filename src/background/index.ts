@@ -208,6 +208,14 @@ async function openPdfWorkspaceInCurrentTab(
   return tab.id;
 }
 
+async function ensureYoutubeAudioOffscreenDocument() {
+  await chrome.offscreen.createDocument({
+    url: chrome.runtime.getURL('src/offscreen/audio-capture.html'),
+    reasons: ['USER_MEDIA'],
+    justification: 'Capture YouTube tab audio for ASR fallback after user starts translation.',
+  });
+}
+
 const handler = createMessageHandler({
   sendMessageToTab,
   translatePage,

@@ -126,4 +126,42 @@ describe('Options App', () => {
 
     expect((screen.getByLabelText('页面加载后自动翻译') as HTMLInputElement).checked).toBe(true);
   });
+
+  it('saves youtube asr provider settings and experimental audio prefetch toggle', async () => {
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <App
+        initialSettings={createDefaultSettings()}
+        saveSettings={saveSettings}
+        testConnection={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('实验性 YouTube 音频预抓'));
+    fireEvent.change(screen.getByLabelText('YouTube ASR Base URL'), {
+      target: { value: 'https://api.example.com/v1' },
+    });
+    fireEvent.change(screen.getByLabelText('YouTube ASR API Key'), {
+      target: { value: 'asr-key' },
+    });
+    fireEvent.change(screen.getByLabelText('YouTube ASR 模型'), {
+      target: { value: 'whisper-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存设置' }));
+
+    await waitFor(() => {
+      expect(saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          youtubeExperimentalAudioPrefetchEnabled: true,
+          youtubeAsrProvider: {
+            providerId: 'openai-compatible',
+            apiKey: 'asr-key',
+            baseUrl: 'https://api.example.com/v1',
+            model: 'whisper-1',
+          },
+        }),
+      );
+    });
+  });
 });

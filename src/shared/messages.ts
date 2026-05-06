@@ -11,6 +11,7 @@ export type StartTranslationJobMessage = {
   type: 'START_TRANSLATION_JOB';
   tabId?: number;
   targetKind?: TranslationTargetKind;
+  segments?: Array<{ id: string; text: string }>;
 };
 
 export type SetDisplayModeMessage = {

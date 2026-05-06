@@ -39,6 +39,7 @@ export const manifest: StaticManifest = {
         'src/pdf/index.html',
         'src/pdf-viewer/index.html',
         'src/offscreen/index.html',
+        'src/offscreen/audio-capture.html',
       ],
     },
   ],
