@@ -5,9 +5,13 @@ import { defineConfig } from 'vite';
 
 import { manifest } from './src/manifest';
 
+const outDir = process.env.BUILD_OUT_DIR || 'dist';
+
 export default defineConfig({
   plugins: [react(), crx({ manifest })],
   build: {
+    outDir,
+    emptyOutDir: true,
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'src/popup/index.html'),

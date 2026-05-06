@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:debug": "VITE_EXTENSION_DEBUG_LOGS=true vite build",
+    "build:debug": "npm run build:local-debug",
+    "build:local-debug": "BUILD_OUT_DIR=dist-local-debug VITE_EXTENSION_DEBUG_LOGS=true vite build",
     "package:release": "VITE_RELEASE_BUILD=true VITE_DEFAULT_DEEPSEEK_API_KEY= VITE_EXTENSION_DEBUG_LOGS=false npm run build && mkdir -p releases && VERSION=$(node -p \"JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version\") && ZIP=\"releases/immersive-ai-translate-v$VERSION.zip\" && rm -f \"$ZIP\" && zip -qr \"$ZIP\" dist",
     "test": "vitest run",
     "test:watch": "vitest",

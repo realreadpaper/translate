@@ -1,5 +1,8 @@
 node_modules
 dist
+dist-local-debug
+dist-pdf-fixed
+dist-*
 playwright-report
 test-results
 .env.local
