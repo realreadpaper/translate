@@ -89,6 +89,36 @@ describe('extractSegments', () => {
     expect(extractSegments(document.body)).toEqual([{ id: 'seg-0', text: 'Hello world' }]);
   });
 
+  it('skips common page chrome while keeping article content', () => {
+    document.body.innerHTML = `
+      <header role="banner">
+        <nav aria-label="Primary">
+          <a href="/home"><span>Home</span></a>
+          <a href="/explore"><span>Explore</span></a>
+          <a href="/notifications"><span>Notifications</span></a>
+          <a href="/messages"><span>Messages</span></a>
+          <a href="/bookmarks"><span>Bookmarks</span></a>
+        </nav>
+      </header>
+      <main>
+        <article data-testid="tweet">
+          <div data-testid="User-Name">Someone</div>
+          <div data-testid="tweetText">Only the post body should be translated.</div>
+          <div role="group" aria-label="Reply, Repost, Like">Reply Repost Like</div>
+        </article>
+        <form role="search">
+          <label>Search</label>
+          <button>Submit</button>
+        </form>
+      </main>
+      <footer>Terms Privacy Cookies</footer>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Only the post body should be translated.' },
+    ]);
+  });
+
   it('assigns DOM segment ids to the same elements returned for translation', () => {
     document.body.innerHTML = `
       <article>

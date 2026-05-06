@@ -24,6 +24,23 @@ const BLOCKED_SELECTOR = [
   'svg',
   'canvas',
 ].join(', ');
+const COMMON_CHROME_SELECTOR = [
+  'header',
+  'footer',
+  'nav',
+  'aside',
+  'button',
+  'label',
+  '[role="banner"]',
+  '[role="contentinfo"]',
+  '[role="navigation"]',
+  '[role="search"]',
+  '[role="menu"]',
+  '[role="menubar"]',
+  '[role="tablist"]',
+  '[role="toolbar"]',
+  '[role="button"]',
+].join(', ');
 const GENERIC_BLOCK_SELECTOR = [
   'h1',
   'h2',
@@ -42,8 +59,6 @@ const GENERIC_BLOCK_SELECTOR = [
   'figcaption',
   'dt',
   'dd',
-  'label',
-  'button',
 ].join(', ');
 const X_CHROME_SELECTOR = [
   '[data-testid="User-Name"]',
@@ -174,7 +189,12 @@ function findSegmentHost(node: Node, root: HTMLElement): HTMLElement | null {
     return null;
   }
 
-  if (isInsideIgnoredContent(parent) || isInsideBlockedContent(parent) || isHidden(parent)) {
+  if (
+    isInsideIgnoredContent(parent) ||
+    isInsideBlockedContent(parent) ||
+    isInsideCommonChrome(parent) ||
+    isHidden(parent)
+  ) {
     return null;
   }
 
@@ -265,6 +285,7 @@ function isEligibleHost(element: HTMLElement): boolean {
   return (
     !isInsideIgnoredContent(element) &&
     !isInsideBlockedContent(element) &&
+    !isInsideCommonChrome(element) &&
     !element.closest(X_CHROME_SELECTOR) &&
     !element.closest(REDDIT_CHROME_SELECTOR) &&
     !isHidden(element)
@@ -277,6 +298,10 @@ function isInsideIgnoredContent(element: HTMLElement): boolean {
 
 function isInsideBlockedContent(element: HTMLElement): boolean {
   return BLOCKED_TAGS.has(element.tagName) || Boolean(element.closest(BLOCKED_SELECTOR));
+}
+
+function isInsideCommonChrome(element: HTMLElement): boolean {
+  return Boolean(element.closest(COMMON_CHROME_SELECTOR));
 }
 
 function isHidden(element: HTMLElement): boolean {
