@@ -54,7 +54,7 @@ export async function translatePageSegments(
 
     for (let attempt = 1; attempt <= MAX_MALFORMED_BATCH_ATTEMPTS; attempt += 1) {
       let result: TranslateBatchResult;
-      const resolvedLanguages = resolveBatchLanguages(
+      const resolvedTranslation = resolveBatchTranslation(
         batch,
         context.sourceLanguage,
         context.targetLanguage,
@@ -66,14 +66,25 @@ export async function translatePageSegments(
         segmentCount: batch.length,
         firstSegmentId: batch[0]?.id,
         lastSegmentId: batch.at(-1)?.id,
-        sourceLanguage: resolvedLanguages.sourceLanguage,
-        targetLanguage: resolvedLanguages.targetLanguage,
+        sourceLanguage: resolvedTranslation.sourceLanguage,
+        targetLanguage: resolvedTranslation.targetLanguage,
+        skipped: !resolvedTranslation.shouldTranslate,
       });
+      if (!resolvedTranslation.shouldTranslate) {
+        logDebug('translator batch skipped same-language content', {
+          batchIndex,
+          segmentCount: batch.length,
+          sourceLanguage: resolvedTranslation.sourceLanguage,
+          targetLanguage: resolvedTranslation.targetLanguage,
+        });
+        completed = true;
+        break;
+      }
       try {
         result = await translateBatch({
           segments: batch,
-          sourceLanguage: resolvedLanguages.sourceLanguage,
-          targetLanguage: resolvedLanguages.targetLanguage,
+          sourceLanguage: resolvedTranslation.sourceLanguage,
+          targetLanguage: resolvedTranslation.targetLanguage,
           contentKind: context.contentKind,
         });
       } catch (error) {
@@ -183,30 +194,30 @@ function isMalformedTranslationError(message: string): boolean {
   );
 }
 
-function resolveBatchLanguages(
+function resolveBatchTranslation(
   segments: SourceSegment[],
   sourceLanguage: string,
   targetLanguage: string,
-): { sourceLanguage: string; targetLanguage: string } {
+): { sourceLanguage: string; targetLanguage: string; shouldTranslate: boolean } {
   const normalizedSource = normalizeLanguageCode(sourceLanguage);
   const normalizedTarget = normalizeLanguageCode(targetLanguage) || DEFAULT_TARGET_LANGUAGE;
 
   if (normalizedSource && normalizedSource !== 'auto') {
+    const sameLanguage = areSameLanguage(normalizedSource, normalizedTarget);
     return {
       sourceLanguage: normalizedSource,
       targetLanguage: normalizedTarget,
+      shouldTranslate: !sameLanguage,
     };
   }
 
   const detectedSource = detectDominantLanguage(segments) ?? DEFAULT_SOURCE_LANGUAGE;
-  const resolvedTarget =
-    areSameLanguage(detectedSource, normalizedTarget)
-      ? getFallbackTargetLanguage(detectedSource)
-      : normalizedTarget;
+  const sameLanguage = areSameLanguage(detectedSource, normalizedTarget);
 
   return {
     sourceLanguage: detectedSource,
-    targetLanguage: resolvedTarget,
+    targetLanguage: normalizedTarget,
+    shouldTranslate: !sameLanguage,
   };
 }
 
@@ -247,8 +258,4 @@ function areSameLanguage(firstLanguage: string, secondLanguage: string): boolean
 
 function getLanguageFamily(language: string): string {
   return language.trim().toLowerCase().split('-')[0] || language;
-}
-
-function getFallbackTargetLanguage(sourceLanguage: string): string {
-  return getLanguageFamily(sourceLanguage) === 'zh' ? 'en' : DEFAULT_TARGET_LANGUAGE;
 }

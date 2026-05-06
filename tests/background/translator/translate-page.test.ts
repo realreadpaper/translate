@@ -34,10 +34,10 @@ describe('translatePageSegments', () => {
     expect(translateCalls).toEqual([{ sourceLanguage: 'en', targetLanguage: 'zh-CN' }]);
   });
 
-  it('detects Chinese auto source batches and translates them to English instead of repeating Chinese', async () => {
+  it('skips Chinese auto source batches when the target is already Chinese', async () => {
     const translateCalls: Array<{ sourceLanguage: string; targetLanguage: string }> = [];
 
-    await translatePageSegments(
+    const result = await translatePageSegments(
       [
         {
           id: 'seg-0',
@@ -67,7 +67,12 @@ describe('translatePageSegments', () => {
       2,
     );
 
-    expect(translateCalls).toEqual([{ sourceLanguage: 'zh-CN', targetLanguage: 'en' }]);
+    expect(translateCalls).toEqual([]);
+    expect(result).toEqual({
+      status: 'success',
+      translated: [],
+      failedBatches: [],
+    });
   });
 
   it('keeps successful batches when one batch fails', async () => {
