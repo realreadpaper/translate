@@ -45,7 +45,24 @@ const GENERIC_BLOCK_SELECTOR = [
   'label',
   'button',
 ].join(', ');
-const X_BLOCK_SELECTOR = '[data-testid="tweetText"]';
+const X_CHROME_SELECTOR = [
+  '[data-testid="User-Name"]',
+  '[data-testid="socialContext"]',
+  '[data-testid="caret"]',
+  '[data-testid="reply"]',
+  '[data-testid="retweet"]',
+  '[data-testid="like"]',
+  '[data-testid="bookmark"]',
+  '[data-testid="share"]',
+  '[role="group"][aria-label]',
+  '[aria-label*="Reply"]',
+  '[aria-label*="Repost"]',
+  '[aria-label*="Like"]',
+].join(', ');
+const X_BLOCK_SELECTOR = [
+  '[data-testid="tweetText"]',
+  'article[data-testid="tweet"] [lang]',
+].join(', ');
 const X_CONTAINER_SELECTOR = 'article[data-testid="tweet"]';
 const REDDIT_CONTAINER_SELECTOR = [
   'shreddit-post',
@@ -248,6 +265,7 @@ function isEligibleHost(element: HTMLElement): boolean {
   return (
     !isInsideIgnoredContent(element) &&
     !isInsideBlockedContent(element) &&
+    !element.closest(X_CHROME_SELECTOR) &&
     !element.closest(REDDIT_CHROME_SELECTOR) &&
     !isHidden(element)
   );

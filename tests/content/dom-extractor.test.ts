@@ -131,6 +131,65 @@ describe('extractSegments', () => {
     expect(tweetText.dataset.segmentId).toBe('seg-0');
   });
 
+  it('extracts X/Twitter post body when X renders it as a lang text container', () => {
+    document.body.innerHTML = `
+      <main>
+        <article data-testid="tweet">
+          <div data-testid="User-Name">
+            <span>Someone</span>
+            <span>@someone</span>
+          </div>
+          <div lang="en" dir="auto">
+            <span>X rendered this body without tweetText.</span>
+            <span> It should still be translated.</span>
+          </div>
+          <div role="group" aria-label="Reply, Repost, Like">Reply Repost Like</div>
+        </article>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      {
+        id: 'seg-0',
+        text: 'X rendered this body without tweetText. It should still be translated.',
+      },
+    ]);
+
+    const body = document.querySelector('[lang="en"][dir="auto"]') as HTMLElement;
+    expect(body.dataset.segmentId).toBe('seg-0');
+  });
+
+  it('extracts X/Twitter long article body containers without translating post chrome', () => {
+    document.body.innerHTML = `
+      <main>
+        <article data-testid="tweet">
+          <div data-testid="User-Name">
+            <span>Author Name</span>
+            <span>@author</span>
+          </div>
+          <div data-testid="tweetText">Short preview before opening the article.</div>
+          <div data-testid="card.layoutLarge.detail">
+            <h1 lang="en">Long article headline</h1>
+            <div lang="en">
+              <p>Long article first paragraph.</p>
+              <p>Long article second paragraph with more detail.</p>
+            </div>
+          </div>
+          <div role="group" aria-label="Reply, Repost, Like">Reply Repost Like</div>
+        </article>
+      </main>
+    `;
+
+    expect(extractSegments(document.body)).toEqual([
+      { id: 'seg-0', text: 'Short preview before opening the article.' },
+      { id: 'seg-1', text: 'Long article headline' },
+      {
+        id: 'seg-2',
+        text: 'Long article first paragraph. Long article second paragraph with more detail.',
+      },
+    ]);
+  });
+
   it('keeps existing segment ids stable when dynamic content is inserted before them', () => {
     document.body.innerHTML = `
       <main>
