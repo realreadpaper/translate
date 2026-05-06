@@ -77,4 +77,42 @@ describe('ad cleaner', () => {
     controller.disconnect();
     vi.useRealTimers();
   });
+
+  it('does not hide the YouTube player when it enters ad playback mode', () => {
+    document.body.innerHTML = `
+      <div id="movie_player" class="html5-video-player ad-showing">
+        <video></video>
+      </div>
+    `;
+
+    const result = cleanAds(document.body);
+    const player = document.querySelector('#movie_player') as HTMLElement;
+
+    expect(result.hiddenCount).toBe(0);
+    expect(player.dataset.immersiveAdHidden).toBeUndefined();
+    expect(player.style.display).toBe('');
+  });
+
+  it('skips YouTube ads by clicking skip controls and fast-forwarding ad playback', () => {
+    document.body.innerHTML = `
+      <div id="movie_player" class="html5-video-player ad-showing">
+        <video></video>
+        <button class="ytp-ad-skip-button-modern">Skip</button>
+      </div>
+    `;
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'duration', { configurable: true, value: 30 });
+    Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: 2 });
+    Object.defineProperty(video, 'muted', { configurable: true, writable: true, value: false });
+    const skipButton = document.querySelector('button') as HTMLButtonElement;
+    const clickSpy = vi.spyOn(skipButton, 'click');
+
+    const result = cleanAds(document.body);
+
+    expect(result.hiddenCount).toBe(0);
+    expect(result.youtubeAdSkipCount).toBe(1);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(video.muted).toBe(true);
+    expect(video.currentTime).toBe(30);
+  });
 });

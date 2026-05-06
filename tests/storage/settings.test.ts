@@ -70,8 +70,9 @@ describe('settings storage', () => {
       autoTranslateOnLoad: true,
       enableYoutubeSubtitleTranslation: false,
       enablePdfDocumentTranslation: true,
+      youtubeAutoCaptionFallback: false,
       pdfOcrFallback: 'disabled' as const,
-      youtubeAsrFallback: 'confirm-first' as const,
+      youtubeAsrFallback: 'realtime' as const,
       subtitleDisplayStyle: 'overlay-top' as const,
       translationCacheEnabled: false,
       debugLoggingEnabled: true,
@@ -86,6 +87,7 @@ describe('settings storage', () => {
     const legacySettings = createDefaultSettings() as Partial<ReturnType<typeof createDefaultSettings>>;
     delete legacySettings.enableYoutubeSubtitleTranslation;
     delete legacySettings.enablePdfDocumentTranslation;
+    delete legacySettings.youtubeAutoCaptionFallback;
     delete legacySettings.pdfOcrFallback;
     delete legacySettings.youtubeAsrFallback;
     delete legacySettings.subtitleDisplayStyle;

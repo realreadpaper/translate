@@ -67,6 +67,62 @@ describe('mountFloatingBall', () => {
     });
   });
 
+  it('does not start generic viewport rescans from YouTube subtitle overlay mutations', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: new URL('https://www.youtube.com/watch?v=demo'),
+    });
+    document.body.innerHTML = `
+      <div id="movie_player">
+        <video></video>
+        <div data-youtube-subtitle-overlay="true">你好</div>
+      </div>
+      <main>
+        <h1>Visible video title</h1>
+      </main>
+    `;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 600,
+    });
+    const title = document.querySelector('h1') as HTMLElement;
+    title.getBoundingClientRect = vi.fn(() => ({
+      top: 100,
+      bottom: 140,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 40,
+      x: 0,
+      y: 100,
+      toJSON: () => undefined,
+    }));
+    const sendRuntimeMessage = vi.fn().mockResolvedValue({
+      type: 'PAGE_TRANSLATION_FINISHED',
+      status: 'success',
+      translated: [{ id: 'rendered-cue-0', translatedText: '你好' }],
+      failedBatches: [],
+    });
+
+    mountFloatingBall(document.body, {
+      sendRuntimeMessage,
+    });
+
+    const trigger = document.querySelector('[data-floating-ball-trigger]') as HTMLButtonElement;
+    await trigger.click();
+    document.querySelector('[data-youtube-subtitle-overlay]')!.textContent = '你好，世界';
+
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    expect(sendRuntimeMessage).toHaveBeenCalledTimes(1);
+    expect(sendRuntimeMessage).toHaveBeenCalledWith({
+      type: 'START_TRANSLATION_JOB',
+      targetKind: 'youtube-subtitles',
+    });
+  });
+
   it('opens the pdf translation workspace from the floating ball on pdf pages', async () => {
     Object.defineProperty(window, 'location', {
       configurable: true,

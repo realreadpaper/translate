@@ -4,6 +4,7 @@ type AdCleanerController = {
 
 type CleanAdsResult = {
   hiddenCount: number;
+  youtubeAdSkipCount?: number;
 };
 
 const AD_CLEANER_DEBOUNCE_MS = 120;
@@ -43,9 +44,20 @@ const AD_ATTRIBUTE_SELECTOR = [
   '[id*="outbrain" i]',
   '[class*="outbrain" i]',
 ].join(', ');
+const YOUTUBE_PLAYER_SELECTOR = '#movie_player, .html5-video-player';
+const YOUTUBE_AD_PLAYER_SELECTOR =
+  '#movie_player.ad-showing, #movie_player.ad-interrupting, .html5-video-player.ad-showing, .html5-video-player.ad-interrupting';
+const YOUTUBE_SKIP_BUTTON_SELECTOR = [
+  '.ytp-ad-skip-button',
+  '.ytp-ad-skip-button-modern',
+  '.ytp-skip-ad-button',
+  '.ytp-ad-overlay-close-button',
+  'button[class*="skip" i][class*="ad" i]',
+].join(', ');
 
 export function cleanAds(root: HTMLElement): CleanAdsResult {
   let hiddenCount = 0;
+  const youtubeAdSkipCount = skipYoutubeAds(root);
 
   collectAdCandidates(root).forEach((element) => {
     if (!canHideElement(element)) {
@@ -58,7 +70,7 @@ export function cleanAds(root: HTMLElement): CleanAdsResult {
     hiddenCount += 1;
   });
 
-  return { hiddenCount };
+  return youtubeAdSkipCount > 0 ? { hiddenCount, youtubeAdSkipCount } : { hiddenCount };
 }
 
 export function startAdCleaner(root: HTMLElement): AdCleanerController {
@@ -125,8 +137,64 @@ function collectAdCandidates(root: HTMLElement): HTMLElement[] {
 function canHideElement(element: HTMLElement): boolean {
   return (
     !BLOCKED_TAGS.has(element.tagName) &&
+    !isYoutubePlayerElement(element) &&
     !element.closest(EXTENSION_OWNED_SELECTOR) &&
     element.dataset.immersiveAdHidden !== 'true'
+  );
+}
+
+function skipYoutubeAds(root: HTMLElement): number {
+  const adPlayers = Array.from(root.querySelectorAll<HTMLElement>(YOUTUBE_AD_PLAYER_SELECTOR));
+  let skipCount = 0;
+
+  adPlayers.forEach((player) => {
+    const skipButton = player.querySelector<HTMLElement>(YOUTUBE_SKIP_BUTTON_SELECTOR);
+    if (skipButton && isActionableSkipButton(skipButton)) {
+      skipButton.click();
+      skipCount += 1;
+    }
+
+    player.querySelectorAll('video').forEach((video) => {
+      accelerateVideoAd(video);
+    });
+  });
+
+  return skipCount;
+}
+
+function accelerateVideoAd(video: HTMLVideoElement) {
+  try {
+    video.muted = true;
+  } catch {
+    // Ignore media property failures from transient YouTube player states.
+  }
+
+  try {
+    video.playbackRate = Math.max(video.playbackRate || 1, 16);
+  } catch {
+    // Some browsers reject playbackRate changes while the media element is swapping sources.
+  }
+
+  try {
+    if (Number.isFinite(video.duration) && video.duration > 0) {
+      video.currentTime = Math.max(video.currentTime, video.duration);
+    }
+  } catch {
+    // Seeking can fail when the ad source is not ready yet; the next cleaner tick will retry.
+  }
+}
+
+function isYoutubePlayerElement(element: HTMLElement): boolean {
+  return element.matches(YOUTUBE_PLAYER_SELECTOR) || Boolean(element.closest(YOUTUBE_PLAYER_SELECTOR));
+}
+
+function isActionableSkipButton(element: HTMLElement): boolean {
+  return (
+    !element.hasAttribute('disabled') &&
+    element.getAttribute('aria-disabled') !== 'true' &&
+    element.hidden !== true &&
+    element.style.display !== 'none' &&
+    element.style.visibility !== 'hidden'
   );
 }
 

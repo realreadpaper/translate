@@ -55,6 +55,10 @@ describe('Options App', () => {
     });
     fireEvent.click(screen.getByLabelText('页面加载后自动翻译'));
     fireEvent.click(screen.getByLabelText('YouTube 字幕翻译'));
+    fireEvent.click(screen.getByLabelText('YouTube 自动字幕兜底'));
+    fireEvent.change(screen.getByLabelText('YouTube ASR 兜底模式'), {
+      target: { value: 'sync-delay' },
+    });
     fireEvent.change(screen.getByLabelText('PDF OCR 兜底'), {
       target: { value: 'disabled' },
     });
@@ -76,8 +80,9 @@ describe('Options App', () => {
         autoTranslateOnLoad: true,
         enableYoutubeSubtitleTranslation: false,
         enablePdfDocumentTranslation: true,
+        youtubeAutoCaptionFallback: false,
         pdfOcrFallback: 'disabled',
-        youtubeAsrFallback: 'confirm-first',
+        youtubeAsrFallback: 'sync-delay',
         subtitleDisplayStyle: 'overlay-top',
         translationCacheEnabled: false,
         debugLoggingEnabled: true,

@@ -32,10 +32,21 @@ test('renders bilingual subtitles on a youtube watch page fixture', async () => 
           autoTranslateOnLoad: false,
           enableYoutubeSubtitleTranslation: true,
           enablePdfDocumentTranslation: true,
+          youtubeAutoCaptionFallback: true,
+          youtubeSubtitlePrefetchEnabled: true,
+          youtubeSubtitlePrefetchWindowSeconds: 180,
+          youtubeExperimentalAudioPrefetchEnabled: false,
+          youtubeAsrProvider: {
+            providerId: 'openai-compatible',
+            apiKey: '',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'whisper-1',
+          },
           pdfOcrFallback: 'confirm-first',
-          youtubeAsrFallback: 'confirm-first',
+          youtubeAsrFallback: 'disabled',
           subtitleDisplayStyle: 'overlay-bottom',
           translationCacheEnabled: true,
+          debugLoggingEnabled: false,
           providers: {
             'openai-compatible': {
               apiKey: '',
@@ -58,6 +69,19 @@ test('renders bilingual subtitles on a youtube watch page fixture', async () => 
 
     const page = await context.newPage();
     const youtubeUrl = 'https://www.youtube.com/watch?v=demo-video';
+    const captionsUrl = 'https://www.youtube.com/api/timedtext?mock=1';
+    const playerResponse = {
+      captions: {
+        playerCaptionsTracklistRenderer: {
+          captionTracks: [
+            {
+              baseUrl: captionsUrl,
+              languageCode: 'en',
+            },
+          ],
+        },
+      },
+    };
 
     await page.route(youtubeUrl, async (route) => {
       await route.fulfill({
@@ -68,11 +92,19 @@ test('renders bilingual subtitles on a youtube watch page fixture', async () => 
             <body>
               <main>
                 <video controls></video>
-                <div data-start-ms="0" data-end-ms="1200">Hello world</div>
+                <script>
+                  window.ytInitialPlayerResponse = ${JSON.stringify(playerResponse)};
+                </script>
               </main>
             </body>
           </html>
         `,
+      });
+    });
+    await page.route(captionsUrl, async (route) => {
+      await route.fulfill({
+        contentType: 'text/xml',
+        body: '<transcript><text start="0" dur="120">Hello world</text></transcript>',
       });
     });
 

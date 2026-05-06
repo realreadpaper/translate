@@ -136,12 +136,6 @@ export function mountFloatingBall(
 
     try {
       const response = (await sendRuntimeMessage(message)) as TranslationResponse;
-      logDebug('floating ball received translation response', {
-        responseType: response.type,
-        status: response.type === 'PAGE_TRANSLATION_FINISHED' ? response.status : undefined,
-        translatedCount:
-          response.type === 'PAGE_TRANSLATION_FINISHED' ? response.translated.length : undefined,
-      });
 
       if (response.type === 'PAGE_TRANSLATION_FAILED') {
         throw new Error(response.message);
@@ -187,7 +181,12 @@ export function mountFloatingBall(
     } finally {
       isTranslating = false;
       trigger.disabled = false;
-      if (needsViewportRescanAfterCurrent && viewportModeStarted && host.isConnected) {
+      if (
+        needsViewportRescanAfterCurrent &&
+        viewportModeStarted &&
+        host.isConnected &&
+        shouldUseViewportIncrementalTranslation()
+      ) {
         needsViewportRescanAfterCurrent = false;
         logDebug('floating ball retrying queued viewport scan');
         scheduleViewportTranslation();
@@ -196,7 +195,7 @@ export function mountFloatingBall(
   }
 
   function scheduleViewportTranslation() {
-    if (!viewportModeStarted || !host.isConnected) {
+    if (!viewportModeStarted || !host.isConnected || !shouldUseViewportIncrementalTranslation()) {
       return;
     }
 
@@ -215,7 +214,7 @@ export function mountFloatingBall(
   }
 
   function scheduleMutationViewportTranslation() {
-    if (!viewportModeStarted || !host.isConnected) {
+    if (!viewportModeStarted || !host.isConnected || !shouldUseViewportIncrementalTranslation()) {
       return;
     }
 
@@ -237,7 +236,7 @@ export function mountFloatingBall(
   }
 
   const contentObserver = new MutationObserver((mutations) => {
-    if (!viewportModeStarted || !host.isConnected) {
+    if (!viewportModeStarted || !host.isConnected || !shouldUseViewportIncrementalTranslation()) {
       return;
     }
 
@@ -321,6 +320,10 @@ function isPdfPage(): boolean {
 
   const sourceUrl = new URLSearchParams(search).get('src') ?? '';
   return /\.pdf(?:$|[?#])/i.test(sourceUrl);
+}
+
+function shouldUseViewportIncrementalTranslation(): boolean {
+  return !isYoutubeWatchPage() && !isPdfPage();
 }
 
 function createSegmentFingerprint(segment: SourceSegment): string {

@@ -1,5 +1,6 @@
 export type DisplayMode = 'bilingual' | 'translated-only' | 'original-only';
 export type FallbackMode = 'confirm-first' | 'disabled';
+export type YoutubeAsrFallbackMode = 'disabled' | 'realtime' | 'sync-delay';
 export type SubtitleDisplayStyle = 'overlay-bottom' | 'overlay-top';
 
 export type ProviderId = 'openai-compatible' | 'deepseek' | 'traditional';
@@ -42,12 +43,13 @@ export type ExtensionSettings = {
   autoTranslateOnLoad: boolean;
   enableYoutubeSubtitleTranslation: boolean;
   enablePdfDocumentTranslation: boolean;
+  youtubeAutoCaptionFallback: boolean;
   youtubeSubtitlePrefetchEnabled: boolean;
   youtubeSubtitlePrefetchWindowSeconds: number;
   youtubeExperimentalAudioPrefetchEnabled: boolean;
   youtubeAsrProvider: YoutubeAsrProviderSettings;
   pdfOcrFallback: FallbackMode;
-  youtubeAsrFallback: FallbackMode;
+  youtubeAsrFallback: YoutubeAsrFallbackMode;
   subtitleDisplayStyle: SubtitleDisplayStyle;
   translationCacheEnabled: boolean;
   debugLoggingEnabled: boolean;

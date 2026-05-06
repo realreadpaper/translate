@@ -51,6 +51,7 @@ async function translatePage(
       | OpenAICompatibleProviderSettings
       | DeepSeekProviderSettings
       | TraditionalProviderSettings;
+    contentKind?: 'html-page' | 'pdf-document' | 'youtube-subtitles';
   },
 ) {
   logDebug('background translation provider dispatch', {
@@ -302,19 +303,6 @@ chrome.runtime.onMessage.addListener((
   sender: chrome.runtime.MessageSender,
   sendResponse: (response?: unknown) => void,
 ) => {
-  if (
-    typeof message === 'object' &&
-    message !== null &&
-    'type' in message &&
-    typeof message.type === 'string'
-  ) {
-    logDebug('runtime message received', {
-      type: message.type,
-      senderTabId: sender.tab?.id,
-      messageTabId: 'tabId' in message ? message.tabId : undefined,
-    });
-  }
-
   if (
     (isStartPageTranslationMessage(message) || isStartTranslationJobMessage(message)) &&
     typeof message.tabId !== 'number'

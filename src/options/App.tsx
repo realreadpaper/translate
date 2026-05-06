@@ -439,6 +439,28 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
               </div>
 
               <div className="field options-toggle-field">
+                <span>YouTube 自动字幕兜底</span>
+                <label className="options-switch" htmlFor="youtube-auto-caption-fallback">
+                  <input
+                    id="youtube-auto-caption-fallback"
+                    aria-label="YouTube 自动字幕兜底"
+                    type="checkbox"
+                    checked={settings.youtubeAutoCaptionFallback}
+                    onChange={(event) =>
+                      persistSettings({
+                        ...settings,
+                        youtubeAutoCaptionFallback: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="options-switch-track" aria-hidden="true">
+                    <span className="options-switch-thumb" />
+                  </span>
+                  <span className="options-switch-copy">字幕轨道为空时自动打开播放器 CC/自动生成字幕。</span>
+                </label>
+              </div>
+
+              <div className="field options-toggle-field">
                 <span>PDF 文档翻译</span>
                 <label className="options-switch" htmlFor="pdf-document-translation">
                   <input
@@ -477,10 +499,10 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                 </select>
               </label>
 
-              <label className="field">
-                <span>YouTube ASR 兜底</span>
+              <label className="field field-span-2">
+                <span>YouTube ASR 兜底模式</span>
                 <select
-                  aria-label="YouTube ASR 兜底"
+                  aria-label="YouTube ASR 兜底模式"
                   value={settings.youtubeAsrFallback}
                   onChange={(event) =>
                     persistSettings({
@@ -489,9 +511,13 @@ export function App({ initialSettings, saveSettings, testConnection }: AppProps)
                     })
                   }
                 >
-                  <option value="confirm-first">需要时先确认</option>
-                  <option value="disabled">关闭</option>
+                  <option value="disabled">关闭：只使用字幕轨道和播放器字幕</option>
+                  <option value="realtime">实时：播放时采集标签页音频，允许滞后</option>
+                  <option value="sync-delay">同步延迟：主动延迟播放，给 ASR/翻译留缓冲</option>
                 </select>
+                <span className="options-switch-copy">
+                  浏览器扩展无法在视频未播放时直接预取 YouTube 音频；无字幕视频必须选择 ASR 降级策略。
+                </span>
               </label>
 
               <div className="field options-toggle-field">

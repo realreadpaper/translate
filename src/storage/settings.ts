@@ -40,6 +40,10 @@ function normalizeSettings(
     normalizedSettings.providers.deepseek.apiKey = defaults.providers.deepseek.apiKey;
   }
 
+  if (normalizedSettings.youtubeAsrFallback === 'confirm-first') {
+    normalizedSettings.youtubeAsrFallback = 'realtime';
+  }
+
   return normalizedSettings;
 }
 
