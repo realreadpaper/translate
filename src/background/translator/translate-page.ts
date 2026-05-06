@@ -25,6 +25,8 @@ type TranslateBatchResult =
 
 type TranslateBatch = (params: TranslateBatchParams) => Promise<TranslateBatchResult>;
 const MAX_MALFORMED_BATCH_ATTEMPTS = 2;
+const DEFAULT_SOURCE_LANGUAGE = 'en';
+const DEFAULT_TARGET_LANGUAGE = 'zh-CN';
 
 export async function translatePageSegments(
   segments: SourceSegment[],
@@ -52,6 +54,11 @@ export async function translatePageSegments(
 
     for (let attempt = 1; attempt <= MAX_MALFORMED_BATCH_ATTEMPTS; attempt += 1) {
       let result: TranslateBatchResult;
+      const resolvedLanguages = resolveBatchLanguages(
+        batch,
+        context.sourceLanguage,
+        context.targetLanguage,
+      );
       logDebug('translator batch starting', {
         batchIndex,
         attempt,
@@ -59,12 +66,14 @@ export async function translatePageSegments(
         segmentCount: batch.length,
         firstSegmentId: batch[0]?.id,
         lastSegmentId: batch.at(-1)?.id,
+        sourceLanguage: resolvedLanguages.sourceLanguage,
+        targetLanguage: resolvedLanguages.targetLanguage,
       });
       try {
         result = await translateBatch({
           segments: batch,
-          sourceLanguage: context.sourceLanguage,
-          targetLanguage: context.targetLanguage,
+          sourceLanguage: resolvedLanguages.sourceLanguage,
+          targetLanguage: resolvedLanguages.targetLanguage,
           contentKind: context.contentKind,
         });
       } catch (error) {
@@ -172,4 +181,74 @@ function isMalformedTranslationError(message: string): boolean {
     message.includes('格式不正确的翻译结果') ||
     message.includes('无法解析的翻译结果')
   );
+}
+
+function resolveBatchLanguages(
+  segments: SourceSegment[],
+  sourceLanguage: string,
+  targetLanguage: string,
+): { sourceLanguage: string; targetLanguage: string } {
+  const normalizedSource = normalizeLanguageCode(sourceLanguage);
+  const normalizedTarget = normalizeLanguageCode(targetLanguage) || DEFAULT_TARGET_LANGUAGE;
+
+  if (normalizedSource && normalizedSource !== 'auto') {
+    return {
+      sourceLanguage: normalizedSource,
+      targetLanguage: normalizedTarget,
+    };
+  }
+
+  const detectedSource = detectDominantLanguage(segments) ?? DEFAULT_SOURCE_LANGUAGE;
+  const resolvedTarget =
+    areSameLanguage(detectedSource, normalizedTarget)
+      ? getFallbackTargetLanguage(detectedSource)
+      : normalizedTarget;
+
+  return {
+    sourceLanguage: detectedSource,
+    targetLanguage: resolvedTarget,
+  };
+}
+
+function detectDominantLanguage(segments: SourceSegment[]): string | null {
+  const text = segments.map((segment) => segment.text).join('\n');
+  let chineseCount = 0;
+  let latinCount = 0;
+
+  for (const char of text) {
+    if (/[\u3400-\u9fff]/u.test(char)) {
+      chineseCount += 1;
+      continue;
+    }
+
+    if (/[A-Za-z]/.test(char)) {
+      latinCount += 1;
+    }
+  }
+
+  if (chineseCount === 0 && latinCount === 0) {
+    return null;
+  }
+
+  if (chineseCount >= Math.max(2, latinCount * 0.3)) {
+    return 'zh-CN';
+  }
+
+  return 'en';
+}
+
+function normalizeLanguageCode(language: string): string {
+  return language.trim();
+}
+
+function areSameLanguage(firstLanguage: string, secondLanguage: string): boolean {
+  return getLanguageFamily(firstLanguage) === getLanguageFamily(secondLanguage);
+}
+
+function getLanguageFamily(language: string): string {
+  return language.trim().toLowerCase().split('-')[0] || language;
+}
+
+function getFallbackTargetLanguage(sourceLanguage: string): string {
+  return getLanguageFamily(sourceLanguage) === 'zh' ? 'en' : DEFAULT_TARGET_LANGUAGE;
 }

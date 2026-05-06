@@ -3,6 +3,73 @@ import { describe, expect, it } from 'vitest';
 import { translatePageSegments } from '../../../src/background/translator/translate-page';
 
 describe('translatePageSegments', () => {
+  it('defaults auto source language to English when the batch is English text', async () => {
+    const translateCalls: Array<{ sourceLanguage: string; targetLanguage: string }> = [];
+
+    await translatePageSegments(
+      [{ id: 'seg-0', text: 'Tonight I will study the meeting reports.' }],
+      {
+        providerId: 'deepseek',
+        sourceLanguage: 'auto',
+        targetLanguage: 'zh-CN',
+        providerSettings: {
+          apiKey: 'test-key',
+          baseUrl: 'https://api.deepseek.com/v1',
+          model: 'deepseek-v4-flash',
+        },
+      },
+      async ({ segments, sourceLanguage, targetLanguage }) => {
+        translateCalls.push({ sourceLanguage, targetLanguage });
+        return {
+          ok: true,
+          segments: segments.map((segment) => ({
+            id: segment.id,
+            translatedText: '今晚我会研究会议报告。',
+          })),
+        };
+      },
+      2,
+    );
+
+    expect(translateCalls).toEqual([{ sourceLanguage: 'en', targetLanguage: 'zh-CN' }]);
+  });
+
+  it('detects Chinese auto source batches and translates them to English instead of repeating Chinese', async () => {
+    const translateCalls: Array<{ sourceLanguage: string; targetLanguage: string }> = [];
+
+    await translatePageSegments(
+      [
+        {
+          id: 'seg-0',
+          text: '睡前福利：海科新源301292 富婆提示：84.00附近低吸介入！',
+        },
+      ],
+      {
+        providerId: 'deepseek',
+        sourceLanguage: 'auto',
+        targetLanguage: 'zh-CN',
+        providerSettings: {
+          apiKey: 'test-key',
+          baseUrl: 'https://api.deepseek.com/v1',
+          model: 'deepseek-v4-flash',
+        },
+      },
+      async ({ segments, sourceLanguage, targetLanguage }) => {
+        translateCalls.push({ sourceLanguage, targetLanguage });
+        return {
+          ok: true,
+          segments: segments.map((segment) => ({
+            id: segment.id,
+            translatedText: 'Bedtime perk: Haike Xinyuan 301292.',
+          })),
+        };
+      },
+      2,
+    );
+
+    expect(translateCalls).toEqual([{ sourceLanguage: 'zh-CN', targetLanguage: 'en' }]);
+  });
+
   it('keeps successful batches when one batch fails', async () => {
     const result = await translatePageSegments(
       [
